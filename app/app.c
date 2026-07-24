@@ -48,6 +48,9 @@
 #ifdef ENABLE_CATMODE
 	#include "app/catmode.h"
 #endif
+#ifdef ENABLE_APRS
+	#include "app/aprs.h"
+#endif
 #include "ARMCM0.h"
 #include "audio.h"
 #include "board.h"
@@ -111,6 +114,10 @@ void (*ProcessKeysFunctions[])(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld) 
 
 #if defined(ENABLE_DIGMODE)
 	[DISPLAY_DIGMODE] = &DIGMODE_ProcessKeys,
+#endif
+
+#ifdef ENABLE_APRS
+	[DISPLAY_APRS] = &APRS_ProcessKeys,
 #endif
 
 };
@@ -613,6 +620,11 @@ static void CheckRadioInterrupts(void)
 		} interrupts;
 
 		interrupts.__raw = BK4819_ReadRegister(BK4819_REG_02);
+
+#ifdef ENABLE_APRS
+		if (gScreenToDisplay == DISPLAY_APRS)
+			APRS_HandleRxInterrupts(interrupts.__raw);
+#endif
 
 		// 0 = no phase shift
 		// 1 = 120deg phase shift
@@ -1507,6 +1519,10 @@ void APP_TimeSlice500ms(void)
 	BATTERY_TimeSlice500ms();
 	SCANNER_TimeSlice500ms();
 	UI_MAIN_TimeSlice500ms();
+
+#ifdef ENABLE_APRS
+	APRS_Task();
+#endif
 
 #ifdef ENABLE_DTMF_CALLING
 	if (gCurrentFunction != FUNCTION_TRANSMIT) {

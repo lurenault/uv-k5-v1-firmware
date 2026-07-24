@@ -16,6 +16,9 @@
 #include "app/digmode.h"
 #include "app/chFrScanner.h"
 #include "app/scanner.h"
+#ifdef ENABLE_APRS
+#include "app/aprs.h"
+#endif
 #include "audio.h"
 #include "driver/bk4819.h"
 #include "driver/bk4819-regs.h"
@@ -463,6 +466,11 @@ static void EnterDigmode(void)
 {
     if (!gDigmodeEntered)
     {
+#ifdef ENABLE_APRS
+        /* APRS owns BK4819 FSK FIFO/IRQ — release before digmode takes RF. */
+        if (gScreenToDisplay == DISPLAY_APRS)
+            APRS_StopListening();
+#endif
         StopConflictingBackgroundWork();
         ResetDigmodeRuntimeState();
         memset(&gDigmodeDisplay, 0, sizeof(gDigmodeDisplay));

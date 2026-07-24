@@ -41,13 +41,15 @@ ENABLE_FASTER_CHANNEL_SCAN    ?= 1
 ENABLE_RSSI_BAR               ?= 1
 ENABLE_AUDIO_BAR              ?= 1
 ENABLE_COPY_CHAN_TO_VFO       ?= 1
-ENABLE_SPECTRUM               ?= 1
+ENABLE_SPECTRUM               ?= 0
 ENABLE_REDUCE_LOW_MID_TX_POWER?= 0
 ENABLE_BYP_RAW_DEMODULATORS   ?= 0
 ENABLE_BLMIN_TMP_OFF          ?= 0
 ENABLE_SCAN_RANGES            ?= 1
 # UART digital modes (FT8 etc.); requires ENABLE_UART=1
 ENABLE_DIGMODE                ?= 1
+# Minimal APRS TX/RX (ta1js Bell202/HDLC)
+ENABLE_APRS                   ?= 1
 
 ifeq ($(ENABLE_DIGMODE),1)
 ifneq ($(ENABLE_UART),1)
@@ -164,6 +166,10 @@ ifeq ($(ENABLE_DIGMODE),1)
 endif
 ifeq ($(ENABLE_CATMODE),1)
 	OBJS += app/catmode.o
+endif
+ifeq ($(ENABLE_APRS),1)
+	OBJS += app/aprs.o
+	OBJS += ui/aprs.o
 endif
 ifeq ($(ENABLE_AM_FIX), 1)
 	OBJS += am_fix.o
@@ -309,6 +315,9 @@ ifeq ($(ENABLE_DIGMODE),1)
 endif
 ifeq ($(ENABLE_CATMODE),1)
 	CFLAGS += -DENABLE_CATMODE
+endif
+ifeq ($(ENABLE_APRS),1)
+	CFLAGS += -DENABLE_APRS
 endif
 ifeq ($(ENABLE_BIG_FREQ),1)
 	CFLAGS  += -DENABLE_BIG_FREQ

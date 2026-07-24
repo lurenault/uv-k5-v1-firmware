@@ -38,6 +38,10 @@ enum GUI_DisplayType_t
 	DISPLAY_DIGMODE,
 #endif
 
+#ifdef ENABLE_APRS
+	DISPLAY_APRS,
+#endif
+
 	DISPLAY_N_ELEM,
 	DISPLAY_INVALID = 0xFFu
 };
