@@ -58,6 +58,9 @@ enum
 	MENU_ABR_MAX,
 	MENU_TDR,
 	MENU_BEEP,
+#ifdef ENABLE_FLASHLIGHT
+	MENU_BEACON,
+#endif
 #ifdef ENABLE_VOICE
 	MENU_VOICE,
 #endif

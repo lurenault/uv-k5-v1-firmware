@@ -89,6 +89,9 @@ const t_menu_item MenuList[] =
 	{"BLMax",  VOICE_ID_INVALID,                       MENU_ABR_MAX       },
 	{"BltTRX", VOICE_ID_INVALID,                       MENU_ABR_ON_TX_RX  },
 	{"Beep",   VOICE_ID_BEEP_PROMPT,                   MENU_BEEP          },
+#ifdef ENABLE_FLASHLIGHT
+	{"Beacon", VOICE_ID_INVALID,                       MENU_BEACON        },
+#endif
 #ifdef ENABLE_VOICE
 	{"Voice",  VOICE_ID_VOICE_PROMPT,                  MENU_VOICE         },
 #endif
@@ -636,6 +639,9 @@ void UI_DisplayMenu(void)
 		case MENU_500TX:
 		case MENU_350EN:
 		case MENU_SCREN:
+#ifdef ENABLE_FLASHLIGHT
+		case MENU_BEACON:
+#endif
 			strcpy(String, gSubMenu_OFF_ON[gSubMenuSelection]);
 			break;
 

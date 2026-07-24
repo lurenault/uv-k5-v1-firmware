@@ -252,6 +252,9 @@ int MENU_GetLimits(uint8_t menu_id, int32_t *pMin, int32_t *pMax)
 		case MENU_500TX:
 		case MENU_350EN:
 		case MENU_SCREN:
+#ifdef ENABLE_FLASHLIGHT
+		case MENU_BEACON:
+#endif
 			*pMin = 0;
 			*pMax = ARRAY_SIZE(gSubMenu_OFF_ON) - 1;
 			break;
@@ -771,6 +774,12 @@ void MENU_AcceptSetting(void)
 			gFlagReconfigureVfos    = true;
 			break;
 
+#ifdef ENABLE_FLASHLIGHT
+		case MENU_BEACON:
+			gSetting_beacon = gSubMenuSelection;
+			break;
+#endif
+
 		#ifdef ENABLE_F_CAL_MENU
 			case MENU_F_CALI:
 				writeXtalFreqCal(gSubMenuSelection, true);
@@ -1136,6 +1145,12 @@ void MENU_ShowCurrentSetting(void)
 		case MENU_SCREN:
 			gSubMenuSelection = gSetting_ScrambleEnable;
 			break;
+
+#ifdef ENABLE_FLASHLIGHT
+		case MENU_BEACON:
+			gSubMenuSelection = gSetting_beacon;
+			break;
+#endif
 
 		#ifdef ENABLE_F_CAL_MENU
 			case MENU_F_CALI:

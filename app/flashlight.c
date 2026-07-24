@@ -2,10 +2,34 @@
 
 #include "driver/gpio.h"
 #include "bsp/dp32g030/gpio.h"
+#include "misc.h"
 
 #include "flashlight.h"
 
 enum FlashlightMode_t  gFlashLightState;
+
+/* Aviation obstruction light: ~120 ms on, period ~5 s (10 ms APP_TimeSlice ticks). */
+static void BeaconTimeSlice(void)
+{
+	static bool sBeaconLit;
+
+	if (!gSetting_beacon) {
+		if (sBeaconLit) {
+			GPIO_ClearBit(&GPIOC->DATA, GPIOC_PIN_FLASHLIGHT);
+			sBeaconLit = false;
+		}
+		return;
+	}
+
+	const uint16_t phase = gFlashLightBlinkCounter % 500u;
+	if (phase < 12u) {
+		GPIO_SetBit(&GPIOC->DATA, GPIOC_PIN_FLASHLIGHT);
+		sBeaconLit = true;
+	} else if (sBeaconLit) {
+		GPIO_ClearBit(&GPIOC->DATA, GPIOC_PIN_FLASHLIGHT);
+		sBeaconLit = false;
+	}
+}
 
 void FlashlightTimeSlice()
 {
@@ -42,7 +66,12 @@ void FlashlightTimeSlice()
 			}
 			c++;
 		}
+		return;
 	}
+
+	/* Skip beacon while user torch is solid ON / blink / SOS. */
+	if (gFlashLightState == FLASHLIGHT_OFF)
+		BeaconTimeSlice();
 }
 
 void ACTION_FlashLight(void)
