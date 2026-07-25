@@ -255,9 +255,25 @@ int MENU_GetLimits(uint8_t menu_id, int32_t *pMin, int32_t *pMax)
 #ifdef ENABLE_FLASHLIGHT
 		case MENU_BEACON:
 #endif
+#ifdef ENABLE_APRS
+		case MENU_DIGI:
+		case MENU_DIGI_WIDE2:
+#endif
 			*pMin = 0;
 			*pMax = ARRAY_SIZE(gSubMenu_OFF_ON) - 1;
 			break;
+
+#ifdef ENABLE_APRS
+		case MENU_DIGI_SSID:
+			*pMin = 0;
+			*pMax = 15;
+			break;
+
+		case MENU_DIGI_CALL:
+			*pMin = 0;
+			*pMax = 0;
+			break;
+#endif
 
 		case MENU_AM:
 			*pMin = 0;
@@ -780,6 +796,48 @@ void MENU_AcceptSetting(void)
 			break;
 #endif
 
+#ifdef ENABLE_APRS
+		case MENU_DIGI:
+			if (gSubMenuSelection)
+				gAPRS_DigiFlags |= APRS_DIGI_FLAG_ON;
+			else
+				gAPRS_DigiFlags &= (uint8_t)~APRS_DIGI_FLAG_ON;
+			if ((gAPRS_DigiFlags & (APRS_DIGI_FLAG_WIDE1 | APRS_DIGI_FLAG_WIDE2)) == 0)
+				gAPRS_DigiFlags |= APRS_DIGI_FLAG_WIDE1;
+			break;
+
+		case MENU_DIGI_WIDE2:
+			if (gSubMenuSelection)
+				gAPRS_DigiFlags |= APRS_DIGI_FLAG_WIDE2;
+			else
+				gAPRS_DigiFlags &= (uint8_t)~APRS_DIGI_FLAG_WIDE2;
+			if ((gAPRS_DigiFlags & (APRS_DIGI_FLAG_WIDE1 | APRS_DIGI_FLAG_WIDE2)) == 0)
+				gAPRS_DigiFlags |= APRS_DIGI_FLAG_WIDE1;
+			break;
+
+		case MENU_DIGI_SSID:
+			gAPRS_DigiSSID = (uint8_t)gSubMenuSelection;
+			break;
+
+		case MENU_DIGI_CALL:
+		{
+			uint8_t n = 0;
+			for (uint8_t i = 0; i < 6; i++) {
+				char c = edit[i];
+				if (c >= 'a' && c <= 'z')
+					c = (char)(c - 32);
+				if (c == '_' || c == ' ' || c == 0)
+					continue;
+				if ((c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z'))
+					gAPRS_DigiCall[n++] = c;
+			}
+			gAPRS_DigiCall[n] = 0;
+			if (n == 0)
+				gAPRS_DigiFlags &= (uint8_t)~APRS_DIGI_FLAG_ON;
+			break;
+		}
+#endif
+
 		#ifdef ENABLE_F_CAL_MENU
 			case MENU_F_CALI:
 				writeXtalFreqCal(gSubMenuSelection, true);
@@ -1152,6 +1210,24 @@ void MENU_ShowCurrentSetting(void)
 			break;
 #endif
 
+#ifdef ENABLE_APRS
+		case MENU_DIGI:
+			gSubMenuSelection = (gAPRS_DigiFlags & APRS_DIGI_FLAG_ON) ? 1 : 0;
+			break;
+
+		case MENU_DIGI_WIDE2:
+			gSubMenuSelection = (gAPRS_DigiFlags & APRS_DIGI_FLAG_WIDE2) ? 1 : 0;
+			break;
+
+		case MENU_DIGI_SSID:
+			gSubMenuSelection = gAPRS_DigiSSID;
+			break;
+
+		case MENU_DIGI_CALL:
+			gSubMenuSelection = 0;
+			break;
+#endif
+
 		#ifdef ENABLE_F_CAL_MENU
 			case MENU_F_CALI:
 				gSubMenuSelection = gEeprom.BK4819_XTAL_FREQ_LOW;
@@ -1227,6 +1303,19 @@ static void MENU_Key_0_to_9(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld)
 
 		return;
 	}
+
+#ifdef ENABLE_APRS
+	if (UI_MENU_GetCurrentMenuId() == MENU_DIGI_CALL && edit_index >= 0)
+	{
+		if (edit_index < 6 && Key <= KEY_9) {
+			edit[edit_index] = (char)('0' + Key - KEY_0);
+			if (++edit_index >= 6)
+				edit_index = 5;
+			gRequestDisplayScreen = DISPLAY_MENU;
+		}
+		return;
+	}
+#endif
 
 	INPUTBOX_Append(Key);
 
@@ -1488,6 +1577,36 @@ static void MENU_Key_MENU(const bool bKeyPressed, const bool bKeyHeld)
 		}
 	}
 
+#ifdef ENABLE_APRS
+	if (UI_MENU_GetCurrentMenuId() == MENU_DIGI_CALL)
+	{
+		if (edit_index < 0) {
+			uint8_t i = 0;
+			memset(edit, 0, sizeof(edit));
+			while (i < 6 && gAPRS_DigiCall[i]) {
+				edit[i] = gAPRS_DigiCall[i];
+				i++;
+			}
+			while (i < 6)
+				edit[i++] = '_';
+			edit[6] = 0;
+			edit_index = 0;
+			memcpy(edit_original, edit, 7);
+			return;
+		}
+		if (edit_index < 5) {
+			edit_index++;
+			return;
+		}
+		edit_index = -1;
+		if (memcmp(edit_original, edit, 7) == 0) {
+			gIsInSubMenu = false;
+			return;
+		}
+		/* changed — fall through to accept */
+	}
+#endif
+
 	// exiting the sub menu
 
 	if (gIsInSubMenu)
@@ -1624,6 +1743,29 @@ static void MENU_Key_UP_DOWN(bool bKeyPressed, bool bKeyHeld, int8_t Direction)
 		}
 		return;
 	}
+
+#ifdef ENABLE_APRS
+	if (UI_MENU_GetCurrentMenuId() == MENU_DIGI_CALL && gIsInSubMenu && edit_index >= 0)
+	{
+		if (bKeyPressed && edit_index < 6 && Direction != 0) {
+			/* Callsign charset: 0-9 A-Z space/_ */
+			char c = edit[edit_index];
+			if (c == '_' || c == ' ')
+				c = (Direction > 0) ? '0' : 'Z';
+			else
+				c = (char)(c + Direction);
+			if (c < '0')
+				c = 'Z';
+			else if (c > '9' && c < 'A')
+				c = (Direction > 0) ? 'A' : '9';
+			else if (c > 'Z')
+				c = '0';
+			edit[edit_index] = c;
+			gRequestDisplayScreen = DISPLAY_MENU;
+		}
+		return;
+	}
+#endif
 
 	if (!bKeyHeld)
 	{

@@ -92,6 +92,12 @@ const t_menu_item MenuList[] =
 #ifdef ENABLE_FLASHLIGHT
 	{"Beacon", VOICE_ID_INVALID,                       MENU_BEACON        },
 #endif
+#ifdef ENABLE_APRS
+	{"Digi",   VOICE_ID_INVALID,                       MENU_DIGI          },
+	{"DgCall", VOICE_ID_INVALID,                       MENU_DIGI_CALL     },
+	{"DgSSID", VOICE_ID_INVALID,                       MENU_DIGI_SSID     },
+	{"WIDE2",  VOICE_ID_INVALID,                       MENU_DIGI_WIDE2    },
+#endif
 #ifdef ENABLE_VOICE
 	{"Voice",  VOICE_ID_VOICE_PROMPT,                  MENU_VOICE         },
 #endif
@@ -645,8 +651,29 @@ void UI_DisplayMenu(void)
 #ifdef ENABLE_FLASHLIGHT
 		case MENU_BEACON:
 #endif
+#ifdef ENABLE_APRS
+		case MENU_DIGI:
+		case MENU_DIGI_WIDE2:
+#endif
 			strcpy(String, gSubMenu_OFF_ON[gSubMenuSelection]);
 			break;
+
+#ifdef ENABLE_APRS
+		case MENU_DIGI_SSID:
+			sprintf(String, "%u", (unsigned int)gSubMenuSelection);
+			break;
+
+		case MENU_DIGI_CALL:
+			if (!gIsInSubMenu || edit_index < 0) {
+				strcpy(String, gAPRS_DigiCall[0] ? gAPRS_DigiCall : "-");
+			} else {
+				UI_PrintString(edit, menu_item_x1, 0, 2, 8);
+				if (edit_index < 6)
+					UI_PrintString("^", menu_item_x1 + (8 * edit_index), 0, 4, 8);
+				already_printed = true;
+			}
+			break;
+#endif
 
 		case MENU_MEM_CH:
 		case MENU_1_CALL:

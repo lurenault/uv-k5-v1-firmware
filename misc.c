@@ -103,6 +103,11 @@ enum BacklightOnRxTx_t gSetting_backlight_on_tx_rx;
 #ifdef ENABLE_FLASHLIGHT
 	bool          gSetting_beacon = false;  /* 0x0F40[7] bit0 inverted: virgin Off */
 #endif
+#ifdef ENABLE_APRS
+	uint8_t       gAPRS_DigiFlags = APRS_DIGI_FLAG_WIDE1; /* digi off; WIDE1 ready */
+	uint8_t       gAPRS_DigiSSID  = 0;
+	char          gAPRS_DigiCall[7];
+#endif
 bool              gSetting_live_DTMF_decoder;
 uint8_t           gSetting_battery_text;
 

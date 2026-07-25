@@ -3,10 +3,10 @@
  * TX/RX register recipe and bit codec are taken from
  * uv-k5-firmware-ta1js/app/aprs_minimal.c (same DP32 UV-K5).
  * Position / Mic-E decode + Maidenhead display are local parse/UI.
- * TX remains raw AX.25 echo.
+ * TX: New n-N digipeater (WB2OSZ-style) — not raw AX.25 echo.
  *
  * Behaviour: side-key ACTION_APRS → DISPLAY_APRS @ 144.640 FM → listen →
- * on FCS-OK frame show call / grid / comment and retransmit the frame as-is.
+ * on FCS-OK frame show call / grid / comment; digipeat only when path matches.
  */
 
 #ifdef ENABLE_APRS
@@ -34,7 +34,9 @@
 #define HDLC_LEAD_FLAGS       32u
 #define HDLC_TAIL_FLAGS       3u
 #define APRS_RX_CAPTURE_BYTES 240u
-#define APRS_RX_FRAME_MAX     80u
+#define APRS_RX_FRAME_MAX     95u /* RX + one via insert (+7) fits */
+#define APRS_DUPE_SLOTS       4u
+#define APRS_DUPE_TICKS       60u /* 30 s @ 500 ms */
 
 #define APRS_RX_IRQ_MASK (BK4819_REG_02_FSK_RX_FINISHED | \
                           BK4819_REG_02_FSK_FIFO_ALMOST_FULL | \
@@ -49,8 +51,11 @@ static uint8_t  gRxFrame[APRS_RX_FRAME_MAX];
 static uint8_t  gLastFrame[APRS_RX_FRAME_MAX];
 static uint8_t  gLastLen;
 static bool     gNeedRexmit;
-static uint8_t  gRexmitCooldown; /* 500 ms ticks; suppress echo loops */
+static uint16_t gPendingDupeHash; /* hashed only after TX succeeds */
+static uint8_t  gRexmitCooldown; /* 500 ms ticks; suppress self-loop */
 static uint8_t  gTxCooldown;     /* 500 ms ticks after TX */
+static uint16_t gDupeHash[APRS_DUPE_SLOTS];
+static uint8_t  gDupeAge[APRS_DUPE_SLOTS];
 
 static bool     gRxArmed;
 static bool     gRxCapturing;
@@ -87,6 +92,204 @@ static uint16_t APRS_CalculateCRC(const uint8_t *data, uint16_t length)
 static uint16_t AX25_CalculateFCS(const uint8_t *data, uint16_t length)
 {
 	return (uint16_t)(~APRS_CalculateCRC(data, length));
+}
+
+/* ---- Digipeater helpers (New n-N) --------------------------------------- */
+
+static void APRS_PutCall(uint8_t *dst, const char *call, uint8_t ssid, bool hbit, bool end)
+{
+	for (uint8_t i = 0; i < 6; i++) {
+		const char c = call[i] ? call[i] : ' ';
+		dst[i] = (uint8_t)((uint8_t)c << 1);
+	}
+	dst[6] = (uint8_t)(0x60u | ((ssid & 0x0Fu) << 1));
+	if (hbit)
+		dst[6] |= 0x80u;
+	if (end)
+		dst[6] |= 0x01u;
+}
+
+static void APRS_PutWide(uint8_t *dst, char nch, uint8_t N, bool hbit, bool end)
+{
+	static const char w[] = "WIDE";
+	for (uint8_t i = 0; i < 4; i++)
+		dst[i] = (uint8_t)((uint8_t)w[i] << 1);
+	dst[4] = (uint8_t)((uint8_t)nch << 1);
+	dst[5] = (uint8_t)(' ' << 1);
+	dst[6] = (uint8_t)(0x60u | ((N & 0x0Fu) << 1));
+	if (hbit)
+		dst[6] |= 0x80u;
+	if (end)
+		dst[6] |= 0x01u;
+}
+
+static bool APRS_AddrEqCall(const uint8_t *addr, const char *call, uint8_t ssid)
+{
+	for (uint8_t i = 0; i < 6; i++) {
+		const char c = (char)(addr[i] >> 1);
+		const char r = call[i] ? call[i] : ' ';
+		if (c != r)
+			return false;
+	}
+	return ((addr[6] >> 1) & 0x0Fu) == (ssid & 0x0Fu);
+}
+
+static bool APRS_AddrIsWide(const uint8_t *addr, char nch, uint8_t *N)
+{
+	if ((char)(addr[0] >> 1) != 'W' || (char)(addr[1] >> 1) != 'I' ||
+	    (char)(addr[2] >> 1) != 'D' || (char)(addr[3] >> 1) != 'E' ||
+	    (char)(addr[4] >> 1) != nch || (char)(addr[5] >> 1) != ' ')
+		return false;
+	*N = (uint8_t)((addr[6] >> 1) & 0x0Fu);
+	return *N >= 1u;
+}
+
+static uint16_t APRS_DupeHash(const uint8_t *frame, uint16_t len)
+{
+	uint16_t a = 0;
+	uint16_t h;
+
+	while (a + 7u <= len - 2u && (frame[a + 6] & 1u) == 0)
+		a += 7;
+	if (a + 7u > len - 2u)
+		return 0;
+	a += 7; /* past last address */
+	/* dest(7)+src(7)+info — skip vias */
+	h = APRS_CalculateCRC(frame, 14);
+	if (a + 2u < len - 2u)
+		h = (uint16_t)(h ^ APRS_CalculateCRC(&frame[a + 2u], (uint16_t)(len - 2u - (a + 2u))));
+	return h ? h : 1u;
+}
+
+static bool APRS_DupeHit(uint16_t hash)
+{
+	for (uint8_t i = 0; i < APRS_DUPE_SLOTS; i++) {
+		if (gDupeAge[i] && gDupeHash[i] == hash)
+			return true;
+	}
+	return false;
+}
+
+static void APRS_DupeAdd(uint16_t hash)
+{
+	uint8_t slot = 0;
+	uint8_t age  = gDupeAge[0];
+
+	for (uint8_t i = 0; i < APRS_DUPE_SLOTS; i++) {
+		if (gDupeAge[i] == 0) {
+			slot = i;
+			break;
+		}
+		if (gDupeAge[i] < age) {
+			age  = gDupeAge[i];
+			slot = i;
+		}
+	}
+	gDupeHash[slot] = hash;
+	gDupeAge[slot]  = APRS_DUPE_TICKS;
+}
+
+/* Build digipeated frame into out. Returns length incl FCS, or 0. */
+static uint8_t APRS_BuildDigi(const uint8_t *in, uint16_t in_len, uint8_t *out, uint16_t out_max)
+{
+	uint16_t addr_end = 0;
+	uint16_t cand     = 0xFFFF;
+	uint16_t via;
+	uint8_t  N        = 0;
+	uint16_t out_len  = in_len;
+
+	if (in_len < 20u || in_len > out_max || gAPRS_DigiCall[0] == 0)
+		return 0;
+	if ((gAPRS_DigiFlags & APRS_DIGI_FLAG_ON) == 0)
+		return 0;
+
+	for (;;) {
+		if (addr_end + 7u > in_len - 2u)
+			return 0;
+		if (in[addr_end + 6] & 1u) {
+			addr_end += 7;
+			break;
+		}
+		addr_end += 7;
+	}
+	if (addr_end < 14u || addr_end + 2u > in_len - 2u)
+		return 0;
+	if (in[addr_end] != 0x03 && in[addr_end] != 0x13)
+		return 0;
+	if (in[addr_end + 1] != 0xF0)
+		return 0;
+
+	/* Do not digipeat our own packets (call+SSID). */
+	if (APRS_AddrEqCall(&in[7], gAPRS_DigiCall, gAPRS_DigiSSID))
+		return 0;
+
+	for (via = 14; via + 7u <= addr_end; via += 7) {
+		const bool h = (in[via + 6] & 0x80u) != 0;
+		if (h) {
+			if (APRS_AddrEqCall(&in[via], gAPRS_DigiCall, gAPRS_DigiSSID))
+				return 0;
+		} else if (cand == 0xFFFF) {
+			cand = via;
+		}
+	}
+	if (cand == 0xFFFF)
+		return 0;
+
+	if (APRS_AddrEqCall(&in[cand], gAPRS_DigiCall, gAPRS_DigiSSID)) {
+		memcpy(out, in, in_len);
+		out[cand + 6] |= 0x80u;
+	} else if ((gAPRS_DigiFlags & APRS_DIGI_FLAG_WIDE1) &&
+		   APRS_AddrIsWide(&in[cand], '1', &N) && N == 1u) {
+		memcpy(out, in, in_len);
+		APRS_PutCall(&out[cand], gAPRS_DigiCall, gAPRS_DigiSSID, true,
+			     (in[cand + 6] & 1u) != 0);
+	} else if ((gAPRS_DigiFlags & APRS_DIGI_FLAG_WIDE2) &&
+		   APRS_AddrIsWide(&in[cand], '2', &N)) {
+		if (N == 1u) {
+			memcpy(out, in, in_len);
+			APRS_PutCall(&out[cand], gAPRS_DigiCall, gAPRS_DigiSSID, true,
+				     (in[cand + 6] & 1u) != 0);
+		} else {
+			/* AX.25 max 8 addresses — refuse insert when full */
+			if (addr_end >= 56u || in_len + 7u > out_max)
+				return 0;
+			memcpy(out, in, cand);
+			APRS_PutCall(&out[cand], gAPRS_DigiCall, gAPRS_DigiSSID, true, false);
+			APRS_PutWide(&out[cand + 7], '2', (uint8_t)(N - 1u), false,
+				     (in[cand + 6] & 1u) != 0);
+			memcpy(&out[cand + 14], &in[cand + 7], in_len - (cand + 7u));
+			out_len = (uint16_t)(in_len + 7u);
+		}
+	} else {
+		return 0;
+	}
+
+	{
+		const uint16_t fcs = AX25_CalculateFCS(out, (uint16_t)(out_len - 2u));
+		out[out_len - 2u] = (uint8_t)fcs;
+		out[out_len - 1u] = (uint8_t)(fcs >> 8);
+	}
+	return (uint8_t)out_len;
+}
+
+static void APRS_ConsiderDigipeat(const uint8_t *frame, uint16_t len)
+{
+	uint16_t h;
+	uint8_t  n;
+
+	if (gRexmitCooldown || len < 20u || len > sizeof(gLastFrame))
+		return;
+
+	h = APRS_DupeHash(frame, len);
+	if (APRS_DupeHit(h))
+		return; /* dupe: still shown, no TX */
+
+	n = APRS_BuildDigi(frame, len, gLastFrame, sizeof(gLastFrame));
+	if (n == 0)
+		return;
+	gPendingDupeHash = h;
+	gLastLen         = n;
+	gNeedRexmit      = true;
 }
 
 /* ---- HDLC bitstream writer (ta1js) -------------------------------------- */
@@ -127,7 +330,7 @@ static void HDLC_PutByte(hdlc_writer_t *w, uint8_t b, bool stuff)
 
 /* ---- Bell 202 TX via BK4819 FSK (ta1js APRS_TransmitBell202) ------------ */
 
-static void APRS_TransmitBell202(const uint8_t *frame, uint16_t frame_len)
+static bool APRS_TransmitBell202(const uint8_t *frame, uint16_t frame_len)
 {
 	uint16_t i;
 
@@ -147,7 +350,7 @@ static void APRS_TransmitBell202(const uint8_t *frame, uint16_t frame_len)
 
 	RADIO_PrepareTX();
 	if (gCurrentFunction != FUNCTION_TRANSMIT)
-		return;
+		return false;
 
 	BK4819_SetAF(BK4819_AF_MUTE);
 
@@ -193,7 +396,9 @@ static void APRS_TransmitBell202(const uint8_t *frame, uint16_t frame_len)
 	FUNCTION_Select(FUNCTION_FOREGROUND);
 
 	gTxCooldown     = 2; /* 1 s */
-	gRexmitCooldown = 4; /* 2 s ignore own echo */
+	gRexmitCooldown = 6; /* 3 s ignore own RF loop */
+	APRS_DupeAdd(gPendingDupeHash);
+	return true;
 }
 
 /* ---- Temp RF @ 144.640 (enter/exit) ------------------------------------ */
@@ -625,11 +830,7 @@ static bool APRS_DecodeCapture(void)
 					const uint16_t fcs = AX25_CalculateFCS(gRxFrame, (uint16_t)(len - 2u));
 					if (fcs == (uint16_t)(gRxFrame[len - 2] | (gRxFrame[len - 1] << 8))) {
 						APRS_ShowFrame(gRxFrame, len);
-						if (!gRexmitCooldown && len <= sizeof(gLastFrame)) {
-							memcpy(gLastFrame, gRxFrame, len);
-							gLastLen     = (uint8_t)len;
-							gNeedRexmit  = true;
-						}
+						APRS_ConsiderDigipeat(gRxFrame, len);
 						return true;
 					}
 				}
@@ -679,6 +880,10 @@ void APRS_Task(void)
 		gRexmitCooldown--;
 	if (gTxCooldown)
 		gTxCooldown--;
+	for (uint8_t i = 0; i < APRS_DUPE_SLOTS; i++) {
+		if (gDupeAge[i])
+			gDupeAge[i]--;
+	}
 
 	if (gScreenToDisplay != DISPLAY_APRS) {
 		if (gRxArmed || gAprsRfActive)
@@ -701,7 +906,8 @@ void APRS_Task(void)
 			gRxArmed     = false;
 			gRxCapturing = false;
 		}
-		APRS_TransmitBell202(gLastFrame, gLastLen);
+		if (!APRS_TransmitBell202(gLastFrame, gLastLen))
+			gNeedRexmit = true; /* channel busy — retry later */
 		return;
 	}
 

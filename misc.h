@@ -164,6 +164,15 @@ extern enum BacklightOnRxTx_t gSetting_backlight_on_tx_rx;
 #ifdef ENABLE_FLASHLIGHT
 	extern bool              gSetting_beacon;
 #endif
+#ifdef ENABLE_APRS
+	/* Digipeater EEPROM 0x0F20: flags / ssid / call[6] */
+	#define APRS_DIGI_FLAG_ON    (1u << 0)
+	#define APRS_DIGI_FLAG_WIDE1 (1u << 1) /* accept WIDE1-1 */
+	#define APRS_DIGI_FLAG_WIDE2 (1u << 2) /* accept WIDE2-n */
+	extern uint8_t           gAPRS_DigiFlags;
+	extern uint8_t           gAPRS_DigiSSID;
+	extern char              gAPRS_DigiCall[7];
+#endif
 extern bool                  gSetting_live_DTMF_decoder;
 extern uint8_t               gSetting_battery_text;
 
