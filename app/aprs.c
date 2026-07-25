@@ -28,6 +28,7 @@
 #include "functions.h"
 #include "misc.h"
 #include "radio.h"
+#include "settings.h"
 #include "ui/ui.h"
 
 /* Suggested regional APRS freq is operator-chosen on the current VFO
@@ -610,7 +611,20 @@ static void APRS_ApplyModemRf(void)
 	uint32_t rx_freq;
 	uint32_t tx_freq;
 
-	if (gAprsRfActive || gRxVfo == NULL || gRxVfo->pRX == NULL || gRxVfo->pTX == NULL)
+	if (gAprsRfActive)
+		return;
+
+	/* Freeze DW; always use selected (TX) VFO — not DW/XB gRxVfo. */
+	gScheduleDualWatch       = false;
+	gDualWatchCountdown_10ms = 0;
+	gDualWatchActive         = false;
+	gRxVfoIsActive           = true;
+	gEeprom.RX_VFO           = gEeprom.TX_VFO;
+	gTxVfo                   = &gEeprom.VfoInfo[gEeprom.TX_VFO];
+	gRxVfo                   = gTxVfo;
+	gCurrentVfo              = gTxVfo;
+
+	if (gRxVfo->pRX == NULL || gRxVfo->pTX == NULL)
 		return;
 
 	/* Effective listen / TX freqs (honours FrequencyReverse via pRX/pTX). */
@@ -640,6 +654,7 @@ static void APRS_ApplyModemRf(void)
 	gAprsRfActive = true;
 
 	RADIO_SetupRegisters(true);
+	RADIO_SetModulation(MODULATION_FM); /* SetupRegisters leaves AF/AFC unset */
 }
 
 static void APRS_RestoreRf(void)
