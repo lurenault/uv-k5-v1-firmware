@@ -5,8 +5,10 @@
  * Position / Mic-E decode + Maidenhead display are local parse/UI.
  * TX digi: OFF (RX only), n-N (WB2OSZ-style), or raw AX.25 echo.
  *
- * Behaviour: side-key ACTION_APRS → DISPLAY_APRS @ 144.640 FM → listen →
+ * Behaviour: side-key ACTION_APRS → DISPLAY_APRS on current VFO freq
+ * (force FM / wide / no CTCSS-DCS for modem) → listen →
  * on FCS-OK frame show call / grid / comment; digipeat per DgPeat mode.
+ * Suggested APRS channel (region-dependent): 144.640 MHz — set on VFO first.
  */
 
 #ifdef ENABLE_APRS
@@ -16,7 +18,6 @@
 #include <stdint.h>
 
 #include "app/aprs.h"
-#include "app/app.h"
 #ifdef ENABLE_DIGMODE
 #include "app/digmode.h"
 #endif
@@ -29,7 +30,8 @@
 #include "radio.h"
 #include "ui/ui.h"
 
-#define APRS_RX_FREQUENCY     14464000u
+/* Suggested regional APRS freq is operator-chosen on the current VFO
+ * (e.g. 144.64000 MHz = 14464000 units); not hard-coded here. */
 #define HDLC_BUF_SIZE         240u
 #define HDLC_LEAD_FLAGS       32u
 #define HDLC_TAIL_FLAGS       3u
@@ -401,8 +403,8 @@ static bool APRS_TransmitBell202(const uint8_t *frame, uint16_t frame_len)
 	BK4819_WriteRegister(BK4819_REG_2B, filt_val);
 	BK4819_WriteRegister(BK4819_REG_51, css_val);
 
-	APP_EndTransmission();
-	FUNCTION_Select(FUNCTION_FOREGROUND);
+	/* Skip APP_EndTransmission — avoids Roger / CSS tail on digi TX. */
+	RADIO_SetupRegisters(true);
 
 	gTxCooldown     = 2; /* 1 s */
 	gRexmitCooldown = 6; /* 3 s ignore own RF loop */
@@ -411,7 +413,7 @@ static bool APRS_TransmitBell202(const uint8_t *frame, uint16_t frame_len)
 	return true;
 }
 
-/* ---- Temp RF @ 144.640 (enter/exit) ------------------------------------ */
+/* ---- Temp modem RF on current VFO (enter/exit) ------------------------- */
 
 static void APRS_ClearDisplayFields(void)
 {
@@ -602,10 +604,18 @@ static uint8_t APRS_ParseCompressed(const uint8_t *p, uint16_t len, int32_t *lat
 	return 1;
 }
 
-static void APRS_ApplyFixedRf(void)
+/* Snapshot VFO, keep current pRX/pTX freq + OUTPUT_POWER, force modem RF. */
+static void APRS_ApplyModemRf(void)
 {
-	if (gAprsRfActive || gRxVfo == NULL)
+	uint32_t rx_freq;
+	uint32_t tx_freq;
+
+	if (gAprsRfActive || gRxVfo == NULL || gRxVfo->pRX == NULL || gRxVfo->pTX == NULL)
 		return;
+
+	/* Effective listen / TX freqs (honours FrequencyReverse via pRX/pTX). */
+	rx_freq = gRxVfo->pRX->Frequency;
+	tx_freq = gRxVfo->pTX->Frequency;
 
 	gAprsSnapVfo        = gRxVfo;
 	gAprsSnapRxFreq     = gRxVfo->freq_config_RX.Frequency;
@@ -616,13 +626,17 @@ static void APRS_ApplyFixedRf(void)
 	gAprsSnapCompander  = gRxVfo->Compander;
 	gAprsSnapBandwidth  = gRxVfo->CHANNEL_BANDWIDTH;
 
-	gRxVfo->freq_config_RX.Frequency = APRS_RX_FREQUENCY;
-	gRxVfo->freq_config_TX.Frequency = APRS_RX_FREQUENCY;
-	gRxVfo->Modulation               = MODULATION_FM;
-	gRxVfo->freq_config_RX.CodeType  = CODE_TYPE_OFF;
-	gRxVfo->freq_config_TX.CodeType  = CODE_TYPE_OFF;
-	gRxVfo->Compander                = 0;
-	gRxVfo->CHANNEL_BANDWIDTH        = BANDWIDTH_WIDE;
+	/* Keep VFO power; apply effective RX/TX freqs through pRX/pTX. */
+	gRxVfo->pRX->Frequency = rx_freq;
+	gRxVfo->pTX->Frequency = tx_freq;
+	/* OUTPUT_POWER / TXP_CalculatedSetting left unchanged (current VFO). */
+
+	/* Conservative modem RF — do not inherit VFO mod/BW/CTCSS/DCS. */
+	gRxVfo->Modulation              = MODULATION_FM;
+	gRxVfo->freq_config_RX.CodeType = CODE_TYPE_OFF;
+	gRxVfo->freq_config_TX.CodeType = CODE_TYPE_OFF;
+	gRxVfo->Compander               = 0;
+	gRxVfo->CHANNEL_BANDWIDTH       = BANDWIDTH_WIDE;
 	gAprsRfActive = true;
 
 	RADIO_SetupRegisters(true);
@@ -903,7 +917,7 @@ void APRS_Task(void)
 	}
 
 	if (!gAprsRfActive)
-		APRS_ApplyFixedRf();
+		APRS_ApplyModemRf();
 
 	if (gNeedRexmit && gLastLen > 0 && gTxCooldown == 0 &&
 	    gCurrentFunction != FUNCTION_TRANSMIT) {
@@ -959,7 +973,7 @@ void ACTION_APRS(void)
 	gNeedRexmit  = false;
 	gLastLen     = 0;
 	GUI_SelectNextDisplay(DISPLAY_APRS);
-	APRS_ApplyFixedRf();
+	APRS_ApplyModemRf();
 	gBeepToPlay = BEEP_1KHZ_60MS_OPTIONAL;
 }
 

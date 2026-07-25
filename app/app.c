@@ -911,6 +911,9 @@ void APP_Update(void)
 #ifdef ENABLE_DTMF_CALLING
 		&& gDTMF_CallState == DTMF_CALL_STATE_NONE
 #endif
+#ifdef ENABLE_APRS
+		&& gScreenToDisplay != DISPLAY_APRS
+#endif
 	) {
 		DualwatchAlternate();    // toggle between the two VFO's
 
