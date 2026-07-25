@@ -161,6 +161,10 @@ void GENERIC_Key_PTT(bool bKeyPressed)
 	if (gScreenToDisplay == DISPLAY_FM)
 		goto cancel_tx; /* minimal FM: never TX from FM screen */
 #endif
+#ifdef ENABLE_APRS
+	if (gScreenToDisplay == DISPLAY_APRS)
+		goto cancel_tx; /* APRS: never voice TX / don't kick UI */
+#endif
 
 	if (gCurrentFunction == FUNCTION_TRANSMIT && gRTTECountdown_10ms == 0) {// already transmitting
 		gInputBoxIndex = 0;
@@ -216,6 +220,9 @@ done:
 	if (gScreenToDisplay != DISPLAY_MENU
 #ifdef ENABLE_FMRADIO
 		&& gRequestDisplayScreen != DISPLAY_FM
+#endif
+#ifdef ENABLE_APRS
+		&& gScreenToDisplay != DISPLAY_APRS
 #endif
 	) {
 		// 1of11 .. don't close the menu

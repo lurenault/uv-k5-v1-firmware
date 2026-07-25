@@ -379,6 +379,14 @@ Skip:
 			break;
 
 		case END_OF_RX_MODE_END:
+#ifdef ENABLE_APRS
+			/* Keep Bell202 FSK armed; SetupRegisters clears REG_3F/modem. */
+			if (gScreenToDisplay == DISPLAY_APRS) {
+				AUDIO_AudioPathOff();
+				gEnableSpeaker = false;
+				FUNCTION_Select(FUNCTION_FOREGROUND);
+			} else
+#endif
 			RADIO_SetupRegisters(true);
 
 #ifdef ENABLE_NOAA
@@ -774,6 +782,10 @@ static void HandleVox(void)
 
 #ifdef ENABLE_FMRADIO
 	if (gFmRadioMode)
+		return;
+#endif
+#ifdef ENABLE_APRS
+	if (gScreenToDisplay == DISPLAY_APRS)
 		return;
 #endif
 
@@ -1838,6 +1850,13 @@ static void ProcessKey(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld)
 	else if (gScreenToDisplay == DISPLAY_FM && gCurrentFunction != FUNCTION_TRANSMIT
 	         && Key != KEY_UP && Key != KEY_DOWN && Key != KEY_EXIT) {
 		/* FM: only UP/DOWN/EXIT; swallow PTT, F, side keys, keypad, etc. */
+		goto Skip;
+	}
+#endif
+#ifdef ENABLE_APRS
+	else if (gScreenToDisplay == DISPLAY_APRS && gCurrentFunction != FUNCTION_TRANSMIT
+	         && Key == KEY_PTT) {
+		/* APRS: ignore voice PTT (EXIT / side-key still work). */
 		goto Skip;
 	}
 #endif
