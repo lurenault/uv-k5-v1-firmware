@@ -1800,14 +1800,11 @@ static uint8_t BK4819_MorsePacked(char c)
 	return 0;
 }
 
-/* TX end: ~100 WPM Tone1 CW of MyCall */
+/* TX end: ~100 WPM Tone1 CW of MyCall (key via TxMute like RogerNormal) */
 static void BK4819_PlayRogerMorse(void)
 {
 	const uint16_t dot_ms = 12u; /* 1200/100 */
 	const uint16_t dash_ms = 36u;
-	const uint16_t tone_reg70 =
-		BK4819_REG_70_ENABLE_TONE1 |
-		(66u << BK4819_REG_70_SHIFT_TONE1_TUNING_GAIN);
 	const char *p = gMyCall;
 
 	if (p[0] == 0)
@@ -1815,10 +1812,12 @@ static void BK4819_PlayRogerMorse(void)
 
 	BK4819_EnterTxMute();
 	BK4819_SetAF(BK4819_AF_MUTE);
+
+	BK4819_WriteRegister(BK4819_REG_70,
+		BK4819_REG_70_ENABLE_TONE1 | (66u << BK4819_REG_70_SHIFT_TONE1_TUNING_GAIN));
 	BK4819_EnableTXLink();
-	SYSTEM_DelayMs(10);
-	BK4819_WriteRegister(BK4819_REG_71, scale_freq(1540));
-	BK4819_ExitTxMute();
+	SYSTEM_DelayMs(50);
+	BK4819_WriteRegister(BK4819_REG_71, scale_freq(750));
 
 	while (*p != 0) {
 		const uint8_t code = BK4819_MorsePacked(*p++);
@@ -1833,16 +1832,15 @@ static void BK4819_PlayRogerMorse(void)
 		for (i = len; i > 0; i--) {
 			const uint16_t on_ms = (pat & (1u << (i - 1))) ? dash_ms : dot_ms;
 
-			BK4819_WriteRegister(BK4819_REG_70, tone_reg70);
+			BK4819_ExitTxMute();
 			SYSTEM_DelayMs(on_ms);
-			BK4819_WriteRegister(BK4819_REG_70, 0x0000);
+			BK4819_EnterTxMute();
 			if (i > 1)
 				SYSTEM_DelayMs(dot_ms);
 		}
 		SYSTEM_DelayMs((uint16_t)(3u * dot_ms));
 	}
 
-	BK4819_EnterTxMute();
 	BK4819_WriteRegister(BK4819_REG_70, 0x0000);
 	BK4819_WriteRegister(BK4819_REG_30, 0xC1FE);
 }
