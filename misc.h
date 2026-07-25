@@ -178,6 +178,8 @@ extern enum BacklightOnRxTx_t gSetting_backlight_on_tx_rx;
 	extern uint8_t           gAPRS_DigiSSID;
 	extern char              gAPRS_DigiCall[7];
 #endif
+/* MyCall EEPROM 0x0E30: call[6] (+2 pad); Morse Roger CW only */
+extern char                  gMyCall[7];
 extern bool                  gSetting_live_DTMF_decoder;
 extern uint8_t               gSetting_battery_text;
 

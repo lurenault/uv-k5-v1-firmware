@@ -102,6 +102,7 @@ const t_menu_item MenuList[] =
 	{"Voice",  VOICE_ID_VOICE_PROMPT,                  MENU_VOICE         },
 #endif
 	{"Roger",  VOICE_ID_INVALID,                       MENU_ROGER         },
+	{"MyCall", VOICE_ID_INVALID,                       MENU_MY_CALL       },
 	{"STE",    VOICE_ID_INVALID,                       MENU_STE           },
 	{"RP STE", VOICE_ID_INVALID,                       MENU_RP_STE        },
 	{"1 Call", VOICE_ID_INVALID,                       MENU_1_CALL        },
@@ -294,7 +295,8 @@ const char gSubMenu_ROGER[][6] =
 {
 	"OFF",
 	"ROGER",
-	"MDC"
+	"MDC",
+	"MORSE"
 };
 
 const char gSubMenu_RESET[][4] =
@@ -684,8 +686,17 @@ void UI_DisplayMenu(void)
 			break;
 
 		case MENU_DIGI_CALL:
+#endif
+		case MENU_MY_CALL:
+		{
+			const char *call = (UI_MENU_GetCurrentMenuId() == MENU_MY_CALL) ? gMyCall :
+#ifdef ENABLE_APRS
+				gAPRS_DigiCall;
+#else
+				gMyCall;
+#endif
 			if (!gIsInSubMenu || edit_index < 0) {
-				strcpy(String, gAPRS_DigiCall[0] ? gAPRS_DigiCall : "-");
+				strcpy(String, call[0] ? call : "-");
 			} else {
 				UI_PrintString(edit, menu_item_x1, 0, 2, 8);
 				if (edit_index < 6)
@@ -693,7 +704,7 @@ void UI_DisplayMenu(void)
 				already_printed = true;
 			}
 			break;
-#endif
+		}
 
 		case MENU_MEM_CH:
 		case MENU_1_CALL:

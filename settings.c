@@ -177,7 +177,7 @@ void SETTINGS_InitEEPROM(void)
 	#ifdef ENABLE_ALARM
 		gEeprom.ALARM_MODE                 = (Data[0] <  2) ? Data[0] : true;
 	#endif
-	gEeprom.ROGER                          = (Data[1] <  3) ? Data[1] : ROGER_MODE_OFF;
+	gEeprom.ROGER                          = (Data[1] <  4) ? Data[1] : ROGER_MODE_OFF;
 	gEeprom.REPEATER_TAIL_TONE_ELIMINATION = (Data[2] < 11) ? Data[2] : 0;
 	gEeprom.TX_VFO                         = (Data[3] <  2) ? Data[3] : 0;
 	gEeprom.BATTERY_TYPE                   = (Data[4] < BATTERY_TYPE_UNKNOWN) ? Data[4] : BATTERY_TYPE_1600_MAH;
@@ -255,6 +255,21 @@ void SETTINGS_InitEEPROM(void)
 		gEeprom.SCAN_LIST_ENABLED[i]     = (Data[j + 0] < 2) ? Data[j] : false;
 		gEeprom.SCANLIST_PRIORITY_CH1[i] =  Data[j + 1];
 		gEeprom.SCANLIST_PRIORITY_CH2[i] =  Data[j + 2];
+	}
+
+	/* 0E30..0E37 — MyCall (Morse Roger); hole after MR attrs, before FM */
+	EEPROM_ReadBuffer(0x0E30, Data, 8);
+	{
+		uint8_t n = 0;
+		gMyCall[0] = 0;
+		for (uint8_t i = 0; i < 6; i++) {
+			const char c = (char)Data[i];
+			if (c == 0x00 || c == (char)0xFF)
+				break;
+			if ((c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z'))
+				gMyCall[n++] = c;
+		}
+		gMyCall[n] = 0;
 	}
 
 #ifdef ENABLE_APRS
@@ -454,7 +469,8 @@ void SETTINGS_FactoryReset(bool bIsAll)
 			(bIsAll ||
 			(
 				!(i >= 0x0D60 && i < 0x0E28) &&     // MR Channel Attributes
-				!(i >= 0x0F18 && i < 0x0F30) &&     // Scan List
+				!(i >= 0x0E30 && i < 0x0E38) &&     // MyCall
+				!(i >= 0x0F18 && i < 0x0F30) &&     // Scan List (+ digi 0x0F20)
 				!(i >= 0x0F50 && i < 0x1C00) &&     // MR Channel Names
 				!(i >= 0x0E40 && i < 0x0E70) &&     // FM Channels
 				!(i >= 0x0E88 && i < 0x0E90)        // FM settings
@@ -632,6 +648,12 @@ void SETTINGS_SaveSettings(void)
 	State[6] = gEeprom.SCANLIST_PRIORITY_CH2[1];
 	State[7] = 0xFF;
 	EEPROM_WriteBuffer(0x0F18, State);
+
+	/* 0E30..0E37 — MyCall */
+	memset(State, 0xFF, sizeof(State));
+	for (uint8_t i = 0; i < 6; i++)
+		State[i] = (uint8_t)(gMyCall[i] ? gMyCall[i] : 0);
+	EEPROM_WriteBuffer(0x0E30, State);
 
 #ifdef ENABLE_APRS
 	/* 0F20..0F27 — digi flags/ssid/call (0F28..0F2F left 0xFF) */

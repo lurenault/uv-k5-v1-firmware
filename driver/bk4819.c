@@ -22,6 +22,7 @@
 #include "../audio.h"
 #include "../bsp/dp32g030/gpio.h"
 #include "../bsp/dp32g030/portcon.h"
+#include "../misc.h"
 
 #include "bk4819.h"
 #include "gpio.h"
@@ -1771,12 +1772,89 @@ void BK4819_PlayRogerMDC(void)
 	BK4819_WriteRegister(BK4819_REG_58, 0x0000);
 }
 
+/* packed: bits7..5 = len(1..5), bits4..0 = pattern MSB-first (1=dash) */
+#define MORSE_P(len, pat) ((uint8_t)(((len) << 5) | ((pat) & 0x1Fu)))
+
+static uint8_t BK4819_MorsePacked(char c)
+{
+	static const uint8_t az[26] = {
+		MORSE_P(2, 0x01), MORSE_P(4, 0x08), MORSE_P(4, 0x0A), MORSE_P(3, 0x04),
+		MORSE_P(1, 0x00), MORSE_P(4, 0x02), MORSE_P(3, 0x06), MORSE_P(4, 0x00),
+		MORSE_P(2, 0x00), MORSE_P(4, 0x07), MORSE_P(3, 0x05), MORSE_P(4, 0x04),
+		MORSE_P(2, 0x03), MORSE_P(2, 0x02), MORSE_P(3, 0x07), MORSE_P(4, 0x06),
+		MORSE_P(4, 0x0D), MORSE_P(3, 0x02), MORSE_P(3, 0x00), MORSE_P(1, 0x01),
+		MORSE_P(3, 0x01), MORSE_P(4, 0x01), MORSE_P(3, 0x03), MORSE_P(4, 0x09),
+		MORSE_P(4, 0x0B), MORSE_P(4, 0x0C),
+	};
+	static const uint8_t dig[10] = {
+		MORSE_P(5, 0x1F), MORSE_P(5, 0x0F), MORSE_P(5, 0x07), MORSE_P(5, 0x03), MORSE_P(5, 0x01),
+		MORSE_P(5, 0x00), MORSE_P(5, 0x10), MORSE_P(5, 0x18), MORSE_P(5, 0x1C), MORSE_P(5, 0x1E),
+	};
+
+	if (c >= 'a' && c <= 'z')
+		c = (char)(c - 32);
+	if (c >= 'A' && c <= 'Z')
+		return az[c - 'A'];
+	if (c >= '0' && c <= '9')
+		return dig[c - '0'];
+	return 0;
+}
+
+/* TX end: ~100 WPM Tone1 CW of MyCall */
+static void BK4819_PlayRogerMorse(void)
+{
+	const uint16_t dot_ms = 12u; /* 1200/100 */
+	const uint16_t dash_ms = 36u;
+	const uint16_t tone_reg70 =
+		BK4819_REG_70_ENABLE_TONE1 |
+		(66u << BK4819_REG_70_SHIFT_TONE1_TUNING_GAIN);
+	const char *p = gMyCall;
+
+	if (p[0] == 0)
+		return;
+
+	BK4819_EnterTxMute();
+	BK4819_SetAF(BK4819_AF_MUTE);
+	BK4819_EnableTXLink();
+	SYSTEM_DelayMs(10);
+	BK4819_WriteRegister(BK4819_REG_71, scale_freq(1540));
+	BK4819_ExitTxMute();
+
+	while (*p != 0) {
+		const uint8_t code = BK4819_MorsePacked(*p++);
+		uint8_t len;
+		uint8_t pat;
+		uint8_t i;
+
+		if (code == 0)
+			continue;
+		len = (uint8_t)(code >> 5);
+		pat = (uint8_t)(code & 0x1Fu);
+		for (i = len; i > 0; i--) {
+			const uint16_t on_ms = (pat & (1u << (i - 1))) ? dash_ms : dot_ms;
+
+			BK4819_WriteRegister(BK4819_REG_70, tone_reg70);
+			SYSTEM_DelayMs(on_ms);
+			BK4819_WriteRegister(BK4819_REG_70, 0x0000);
+			if (i > 1)
+				SYSTEM_DelayMs(dot_ms);
+		}
+		SYSTEM_DelayMs((uint16_t)(3u * dot_ms));
+	}
+
+	BK4819_EnterTxMute();
+	BK4819_WriteRegister(BK4819_REG_70, 0x0000);
+	BK4819_WriteRegister(BK4819_REG_30, 0xC1FE);
+}
+
 void BK4819_PlayRoger(void)
 {
 	if (gEeprom.ROGER == ROGER_MODE_ROGER) {
 		BK4819_PlayRogerNormal();
 	} else if (gEeprom.ROGER == ROGER_MODE_MDC) {
 		BK4819_PlayRogerMDC();
+	} else if (gEeprom.ROGER == ROGER_MODE_MORSE) {
+		BK4819_PlayRogerMorse();
 	}
 }
 

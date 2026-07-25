@@ -108,6 +108,7 @@ enum BacklightOnRxTx_t gSetting_backlight_on_tx_rx;
 	uint8_t       gAPRS_DigiSSID  = 0;
 	char          gAPRS_DigiCall[7];
 #endif
+char              gMyCall[7];
 bool              gSetting_live_DTMF_decoder;
 uint8_t           gSetting_battery_text;
 

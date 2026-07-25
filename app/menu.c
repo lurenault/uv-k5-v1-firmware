@@ -48,6 +48,28 @@
 	#define ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
 #endif
 
+/* MyCall / DgCall share 6-char edit UI; buffers stay separate */
+static bool MENU_IsCallEdit(void)
+{
+	const uint8_t m = UI_MENU_GetCurrentMenuId();
+	return m == MENU_MY_CALL
+#ifdef ENABLE_APRS
+		|| m == MENU_DIGI_CALL
+#endif
+		;
+}
+
+static char *MENU_CallEditTarget(void)
+{
+	if (UI_MENU_GetCurrentMenuId() == MENU_MY_CALL)
+		return gMyCall;
+#ifdef ENABLE_APRS
+	if (UI_MENU_GetCurrentMenuId() == MENU_DIGI_CALL)
+		return gAPRS_DigiCall;
+#endif
+	return NULL;
+}
+
 uint8_t gUnlockAllTxConfCnt;
 
 #ifdef ENABLE_F_CAL_MENU
@@ -280,6 +302,11 @@ int MENU_GetLimits(uint8_t menu_id, int32_t *pMin, int32_t *pMax)
 			*pMax = 0;
 			break;
 #endif
+
+		case MENU_MY_CALL:
+			*pMin = 0;
+			*pMax = 0;
+			break;
 
 		case MENU_AM:
 			*pMin = 0;
@@ -843,6 +870,22 @@ void MENU_AcceptSetting(void)
 		}
 #endif
 
+		case MENU_MY_CALL:
+		{
+			uint8_t n = 0;
+			for (uint8_t i = 0; i < 6; i++) {
+				char c = edit[i];
+				if (c >= 'a' && c <= 'z')
+					c = (char)(c - 32);
+				if (c == '_' || c == ' ' || c == 0)
+					continue;
+				if ((c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z'))
+					gMyCall[n++] = c;
+			}
+			gMyCall[n] = 0;
+			break;
+		}
+
 		#ifdef ENABLE_F_CAL_MENU
 			case MENU_F_CALI:
 				writeXtalFreqCal(gSubMenuSelection, true);
@@ -1244,6 +1287,10 @@ void MENU_ShowCurrentSetting(void)
 			break;
 #endif
 
+		case MENU_MY_CALL:
+			gSubMenuSelection = 0;
+			break;
+
 		#ifdef ENABLE_F_CAL_MENU
 			case MENU_F_CALI:
 				gSubMenuSelection = gEeprom.BK4819_XTAL_FREQ_LOW;
@@ -1320,8 +1367,7 @@ static void MENU_Key_0_to_9(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld)
 		return;
 	}
 
-#ifdef ENABLE_APRS
-	if (UI_MENU_GetCurrentMenuId() == MENU_DIGI_CALL && edit_index >= 0)
+	if (MENU_IsCallEdit() && edit_index >= 0)
 	{
 		if (edit_index < 6 && Key <= KEY_9) {
 			edit[edit_index] = (char)('0' + Key - KEY_0);
@@ -1331,7 +1377,6 @@ static void MENU_Key_0_to_9(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld)
 		}
 		return;
 	}
-#endif
 
 	INPUTBOX_Append(Key);
 
@@ -1593,14 +1638,14 @@ static void MENU_Key_MENU(const bool bKeyPressed, const bool bKeyHeld)
 		}
 	}
 
-#ifdef ENABLE_APRS
-	if (UI_MENU_GetCurrentMenuId() == MENU_DIGI_CALL)
+	if (MENU_IsCallEdit())
 	{
+		char *call = MENU_CallEditTarget();
 		if (edit_index < 0) {
 			uint8_t i = 0;
 			memset(edit, 0, sizeof(edit));
-			while (i < 6 && gAPRS_DigiCall[i]) {
-				edit[i] = gAPRS_DigiCall[i];
+			while (call && i < 6 && call[i]) {
+				edit[i] = call[i];
 				i++;
 			}
 			while (i < 6)
@@ -1621,7 +1666,6 @@ static void MENU_Key_MENU(const bool bKeyPressed, const bool bKeyHeld)
 		}
 		/* changed — fall through to accept */
 	}
-#endif
 
 	// exiting the sub menu
 
@@ -1760,8 +1804,7 @@ static void MENU_Key_UP_DOWN(bool bKeyPressed, bool bKeyHeld, int8_t Direction)
 		return;
 	}
 
-#ifdef ENABLE_APRS
-	if (UI_MENU_GetCurrentMenuId() == MENU_DIGI_CALL && gIsInSubMenu && edit_index >= 0)
+	if (MENU_IsCallEdit() && gIsInSubMenu && edit_index >= 0)
 	{
 		if (bKeyPressed && edit_index < 6 && Direction != 0) {
 			/* Callsign charset: 0-9 A-Z space/_ */
@@ -1781,7 +1824,6 @@ static void MENU_Key_UP_DOWN(bool bKeyPressed, bool bKeyHeld, int8_t Direction)
 		}
 		return;
 	}
-#endif
 
 	if (!bKeyHeld)
 	{
