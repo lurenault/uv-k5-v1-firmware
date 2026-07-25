@@ -57,7 +57,9 @@ Anyway, have fun.
 
  ## Manual
 
-Up to date manual is available in the [Wiki section](https://github.com/egzumer/uv-k5-firmware-custom/wiki)
+Up to date upstream manual is available in the [Wiki section](https://github.com/egzumer/uv-k5-firmware-custom/wiki).
+
+本 fork（bg7nzl / k5-v6）增量功能与操作说明见英文手册 [`docs/USER_MANUAL_BG7NZL.md`](docs/USER_MANUAL_BG7NZL.md) 与中文手册 [`docs/USER_MANUAL_BG7NZL_ZH.md`](docs/USER_MANUAL_BG7NZL_ZH.md)；面向 auto-release 的英文构建/变更摘要见 [`CurrentReleaseNotes.md`](CurrentReleaseNotes.md)（Flash 预算约 **60K**，见 `firmware.ld`）。
 
 ## Radio performance
 

@@ -7,26 +7,34 @@
 
 ## What's new since the previous auto-release
 
-### CAT control
+### APRS (side-key screen)
 
-- **CAT mode** — serial protocol on the programming UART (38400 baud), PC tools under `tools/cat_control/`, compatible with the reference `github-repo` frame format.
-- **Simplified CAT UX** — removed the dedicated CAT LCD page; CAT operates directly on the current VFO with a **CAT** label on the status bar. K1-style power levels on the wire are mapped to K5 LOW/MID/HIGH in firmware.
-- **Web UI** — browser control with COM-port selection, live status, and channel preset management (`tools/cat_control/webui/`). Battery voltage and RSSI/S-meter display fixes in the UI.
+- **Enter via side key** (default F2 long = APRS). RF uses the **currently selected VFO** frequency and power; temporarily forces **FM / wide / CTCSS-DCS off / compander off**, restores the VFO snapshot on exit.
+- **First entry** locks `TX_VFO` and forces FM so Dual Watch / cross-band does not leave RX on the wrong VFO.
+- On the APRS screen: **Dual Watch off**, **PTT / VOX blocked** for voice TX; **squelch end does not tear down** the Bell202/FSK modem. Global menu **Sql** is kept (not forced to 1).
+- **Digipeater (DgPeat)**: OFF / n-N / echo; **WIDE** 1 / 2 / 1+2; DigiCall EEPROM **`0x0F20`**. Modem path from **ta1js**; decode UI shows call / Maidenhead / comment.
+- User-facing manual: English [`docs/USER_MANUAL_BG7NZL.md`](docs/USER_MANUAL_BG7NZL.md), Chinese [`docs/USER_MANUAL_BG7NZL_ZH.md`](docs/USER_MANUAL_BG7NZL_ZH.md).
 
-### Build & packaging
+### Morse Roger (MyCall)
 
+- Roger menu adds **MORSE**: after FM PTT release, keys **MyCall** as audio-simulated CW (**Tone1 + TxMute**, **750 Hz** — not true CW / not `Demodu=CW`).
+- MyCall ≤6 chars, EEPROM **`0x0E30`**, independent of DigiCall; empty MyCall → silent.
+
+### Beacon / flashlight
+
+- Menu **Beacon**: obstruction-light style slow blink on the flashlight LED (~120 ms on, ~5 s period) when the light is otherwise off.
+
+### Build & packaging / flash budget
+
+- Linker flash region is **60K** (`firmware.ld`); keep features within that budget (current default build text is near the limit).
 - **`build-packed.sh`** — one-step ELF build plus versioned packed `.bin` output.
 - **`run_webui.sh`** — local venv setup and CAT Web UI launcher.
+- Size helpers: `make` emits `firmware.map`; optional `make size-report`.
 
-### RF / transmission
+### CAT / RF (carried forward)
 
-- **AM and USB TX** — improved modulation handling and BK4819 register configuration for AM and USB voice transmission.
-- **DSB-SC not included** — an experimental DSB transmit path was tried and **reverted**; this build does not ship DSB-SC TX.
-
-### Flash / UI (size)
-
-- **Frequency display helper** — `UI_FormatFrequency()` replaces repeated `sprintf` MHz formatting across main, menu, scanner, digimode, aircopy, and spectrum screens (~**140 bytes** `.text` savings measured on the current toolchain).
-- **Size analysis** — `make` emits `firmware.map`; optional `make size-report` writes section, symbol, and disassembly listings (gitignored artifacts).
+- **CAT** on programming UART (38400), PC tools under `tools/cat_control/`; status-bar **CAT** label (no dedicated CAT LCD page).
+- **AM / USB TX** supported; experimental **DSB-SC not included**.
 
 ---
 
