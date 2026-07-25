@@ -93,10 +93,10 @@ const t_menu_item MenuList[] =
 	{"Beacon", VOICE_ID_INVALID,                       MENU_BEACON        },
 #endif
 #ifdef ENABLE_APRS
-	{"Digi",   VOICE_ID_INVALID,                       MENU_DIGI          },
+	{"DgPeat", VOICE_ID_INVALID,                       MENU_DIGI          },
 	{"DgCall", VOICE_ID_INVALID,                       MENU_DIGI_CALL     },
 	{"DgSSID", VOICE_ID_INVALID,                       MENU_DIGI_SSID     },
-	{"WIDE2",  VOICE_ID_INVALID,                       MENU_DIGI_WIDE2    },
+	{"WIDE",   VOICE_ID_INVALID,                       MENU_DIGI_WIDE     },
 #endif
 #ifdef ENABLE_VOICE
 	{"Voice",  VOICE_ID_VOICE_PROMPT,                  MENU_VOICE         },
@@ -182,6 +182,22 @@ const char gSubMenu_OFF_ON[][4] =
 	"OFF",
 	"ON"
 };
+
+#ifdef ENABLE_APRS
+const char gSubMenu_DIGI[][5] =
+{
+	"OFF",
+	"n-N",
+	"echo"
+};
+
+const char gSubMenu_DIGI_WIDE[][4] =
+{
+	"1",
+	"2",
+	"1+2"
+};
+#endif
 
 const char gSubMenu_SAVE[][4] =
 {
@@ -651,14 +667,18 @@ void UI_DisplayMenu(void)
 #ifdef ENABLE_FLASHLIGHT
 		case MENU_BEACON:
 #endif
-#ifdef ENABLE_APRS
-		case MENU_DIGI:
-		case MENU_DIGI_WIDE2:
-#endif
 			strcpy(String, gSubMenu_OFF_ON[gSubMenuSelection]);
 			break;
 
 #ifdef ENABLE_APRS
+		case MENU_DIGI:
+			strcpy(String, gSubMenu_DIGI[gSubMenuSelection]);
+			break;
+
+		case MENU_DIGI_WIDE:
+			strcpy(String, gSubMenu_DIGI_WIDE[gSubMenuSelection]);
+			break;
+
 		case MENU_DIGI_SSID:
 			sprintf(String, "%u", (unsigned int)gSubMenuSelection);
 			break;

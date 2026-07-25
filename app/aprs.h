@@ -1,7 +1,7 @@
 /* Minimal APRS TX/RX for UV-K5 (k5-v6).
  * Modem/HDLC/AX.25 path follows uv-k5-firmware-ta1js app/aprs_minimal.c.
  * Position/Mic-E decode + Maidenhead UI fields are local parse/display.
- * TX: New n-N digipeater (not raw AX.25 echo).
+ * TX digi modes: OFF / n-N path rewrite / raw AX.25 echo.
  */
 
 #ifndef APP_APRS_H

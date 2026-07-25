@@ -65,7 +65,7 @@ enum
 	MENU_DIGI,
 	MENU_DIGI_CALL,
 	MENU_DIGI_SSID,
-	MENU_DIGI_WIDE2,
+	MENU_DIGI_WIDE,
 #endif
 #ifdef ENABLE_VOICE
 	MENU_VOICE,
@@ -144,6 +144,10 @@ extern const char        gSubMenu_TXP[3][5];
 extern const char        gSubMenu_SFT_D[3][4];
 extern const char        gSubMenu_W_N[2][7];
 extern const char        gSubMenu_OFF_ON[2][4];
+#ifdef ENABLE_APRS
+extern const char        gSubMenu_DIGI[3][5];
+extern const char        gSubMenu_DIGI_WIDE[3][4];
+#endif
 extern const char        gSubMenu_SAVE[5][4];
 extern const char        gSubMenu_TOT[11][7];
 extern const char* const gSubMenu_RXMode[4];

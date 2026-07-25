@@ -165,10 +165,15 @@ extern enum BacklightOnRxTx_t gSetting_backlight_on_tx_rx;
 	extern bool              gSetting_beacon;
 #endif
 #ifdef ENABLE_APRS
-	/* Digipeater EEPROM 0x0F20: flags / ssid / call[6] */
-	#define APRS_DIGI_FLAG_ON    (1u << 0)
-	#define APRS_DIGI_FLAG_WIDE1 (1u << 1) /* accept WIDE1-1 */
-	#define APRS_DIGI_FLAG_WIDE2 (1u << 2) /* accept WIDE2-n */
+	/* Digipeater EEPROM 0x0F20: flags / ssid / call[6]
+	 * flags: bits1:0=mode (0=OFF 1=n-N 2=echo) bit2=WIDE1 bit3=WIDE2
+	 * WIDE menu: 1=WIDE1 2=WIDE2 1+2=both; virgin 0xFF → OFF + WIDE1 */
+	#define APRS_DIGI_MODE_MASK   0x03u
+	#define APRS_DIGI_MODE_OFF    0u
+	#define APRS_DIGI_MODE_NN     1u
+	#define APRS_DIGI_MODE_ECHO   2u
+	#define APRS_DIGI_FLAG_WIDE1  (1u << 2)
+	#define APRS_DIGI_FLAG_WIDE2  (1u << 3)
 	extern uint8_t           gAPRS_DigiFlags;
 	extern uint8_t           gAPRS_DigiSSID;
 	extern char              gAPRS_DigiCall[7];

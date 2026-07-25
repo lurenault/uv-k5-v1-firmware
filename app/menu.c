@@ -255,15 +255,21 @@ int MENU_GetLimits(uint8_t menu_id, int32_t *pMin, int32_t *pMax)
 #ifdef ENABLE_FLASHLIGHT
 		case MENU_BEACON:
 #endif
-#ifdef ENABLE_APRS
-		case MENU_DIGI:
-		case MENU_DIGI_WIDE2:
-#endif
 			*pMin = 0;
 			*pMax = ARRAY_SIZE(gSubMenu_OFF_ON) - 1;
 			break;
 
 #ifdef ENABLE_APRS
+		case MENU_DIGI:
+			*pMin = 0;
+			*pMax = ARRAY_SIZE(gSubMenu_DIGI) - 1;
+			break;
+
+		case MENU_DIGI_WIDE:
+			*pMin = 0;
+			*pMax = ARRAY_SIZE(gSubMenu_DIGI_WIDE) - 1;
+			break;
+
 		case MENU_DIGI_SSID:
 			*pMin = 0;
 			*pMax = 15;
@@ -798,20 +804,19 @@ void MENU_AcceptSetting(void)
 
 #ifdef ENABLE_APRS
 		case MENU_DIGI:
-			if (gSubMenuSelection)
-				gAPRS_DigiFlags |= APRS_DIGI_FLAG_ON;
-			else
-				gAPRS_DigiFlags &= (uint8_t)~APRS_DIGI_FLAG_ON;
+			gAPRS_DigiFlags = (uint8_t)((gAPRS_DigiFlags & (uint8_t)~APRS_DIGI_MODE_MASK) |
+				((uint8_t)gSubMenuSelection & APRS_DIGI_MODE_MASK));
 			if ((gAPRS_DigiFlags & (APRS_DIGI_FLAG_WIDE1 | APRS_DIGI_FLAG_WIDE2)) == 0)
 				gAPRS_DigiFlags |= APRS_DIGI_FLAG_WIDE1;
 			break;
 
-		case MENU_DIGI_WIDE2:
-			if (gSubMenuSelection)
+		case MENU_DIGI_WIDE:
+			gAPRS_DigiFlags &= (uint8_t)~(APRS_DIGI_FLAG_WIDE1 | APRS_DIGI_FLAG_WIDE2);
+			if (gSubMenuSelection == 1)
 				gAPRS_DigiFlags |= APRS_DIGI_FLAG_WIDE2;
+			else if (gSubMenuSelection == 2)
+				gAPRS_DigiFlags |= (uint8_t)(APRS_DIGI_FLAG_WIDE1 | APRS_DIGI_FLAG_WIDE2);
 			else
-				gAPRS_DigiFlags &= (uint8_t)~APRS_DIGI_FLAG_WIDE2;
-			if ((gAPRS_DigiFlags & (APRS_DIGI_FLAG_WIDE1 | APRS_DIGI_FLAG_WIDE2)) == 0)
 				gAPRS_DigiFlags |= APRS_DIGI_FLAG_WIDE1;
 			break;
 
@@ -832,8 +837,8 @@ void MENU_AcceptSetting(void)
 					gAPRS_DigiCall[n++] = c;
 			}
 			gAPRS_DigiCall[n] = 0;
-			if (n == 0)
-				gAPRS_DigiFlags &= (uint8_t)~APRS_DIGI_FLAG_ON;
+			if (n == 0 && (gAPRS_DigiFlags & APRS_DIGI_MODE_MASK) == APRS_DIGI_MODE_NN)
+				gAPRS_DigiFlags &= (uint8_t)~APRS_DIGI_MODE_MASK;
 			break;
 		}
 #endif
@@ -1212,12 +1217,23 @@ void MENU_ShowCurrentSetting(void)
 
 #ifdef ENABLE_APRS
 		case MENU_DIGI:
-			gSubMenuSelection = (gAPRS_DigiFlags & APRS_DIGI_FLAG_ON) ? 1 : 0;
+			gSubMenuSelection = (int32_t)(gAPRS_DigiFlags & APRS_DIGI_MODE_MASK);
+			if (gSubMenuSelection > (int32_t)APRS_DIGI_MODE_ECHO)
+				gSubMenuSelection = APRS_DIGI_MODE_OFF;
 			break;
 
-		case MENU_DIGI_WIDE2:
-			gSubMenuSelection = (gAPRS_DigiFlags & APRS_DIGI_FLAG_WIDE2) ? 1 : 0;
+		case MENU_DIGI_WIDE:
+		{
+			const uint8_t w = (uint8_t)(gAPRS_DigiFlags &
+				(APRS_DIGI_FLAG_WIDE1 | APRS_DIGI_FLAG_WIDE2));
+			if (w == (APRS_DIGI_FLAG_WIDE1 | APRS_DIGI_FLAG_WIDE2))
+				gSubMenuSelection = 2;
+			else if (w == APRS_DIGI_FLAG_WIDE2)
+				gSubMenuSelection = 1;
+			else
+				gSubMenuSelection = 0; /* WIDE1, or neither → 1 */
 			break;
+		}
 
 		case MENU_DIGI_SSID:
 			gSubMenuSelection = gAPRS_DigiSSID;

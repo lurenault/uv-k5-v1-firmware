@@ -262,10 +262,13 @@ void SETTINGS_InitEEPROM(void)
 	EEPROM_ReadBuffer(0x0F20, Data, 16);
 	gAPRS_DigiCall[0] = 0;
 	if (Data[0] == 0xFF) {
-		gAPRS_DigiFlags = APRS_DIGI_FLAG_WIDE1; /* Digi Off, WIDE1 alias armed */
+		gAPRS_DigiFlags = APRS_DIGI_FLAG_WIDE1; /* mode OFF, WIDE1 armed */
 		gAPRS_DigiSSID  = 0;
 	} else {
-		gAPRS_DigiFlags = (uint8_t)(Data[0] & (APRS_DIGI_FLAG_ON | APRS_DIGI_FLAG_WIDE1 | APRS_DIGI_FLAG_WIDE2));
+		gAPRS_DigiFlags = (uint8_t)(Data[0] & (APRS_DIGI_MODE_MASK |
+			APRS_DIGI_FLAG_WIDE1 | APRS_DIGI_FLAG_WIDE2));
+		if ((gAPRS_DigiFlags & APRS_DIGI_MODE_MASK) > APRS_DIGI_MODE_ECHO)
+			gAPRS_DigiFlags &= (uint8_t)~APRS_DIGI_MODE_MASK;
 		gAPRS_DigiSSID  = (Data[1] <= 15u) ? Data[1] : 0;
 		{
 			uint8_t n = 0;
@@ -277,8 +280,9 @@ void SETTINGS_InitEEPROM(void)
 					gAPRS_DigiCall[n++] = c;
 			}
 			gAPRS_DigiCall[n] = 0;
-			if (n == 0)
-				gAPRS_DigiFlags &= (uint8_t)~APRS_DIGI_FLAG_ON;
+			/* n-N needs a callsign; echo does not */
+			if (n == 0 && (gAPRS_DigiFlags & APRS_DIGI_MODE_MASK) == APRS_DIGI_MODE_NN)
+				gAPRS_DigiFlags &= (uint8_t)~APRS_DIGI_MODE_MASK;
 		}
 	}
 #endif

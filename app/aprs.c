@@ -3,10 +3,10 @@
  * TX/RX register recipe and bit codec are taken from
  * uv-k5-firmware-ta1js/app/aprs_minimal.c (same DP32 UV-K5).
  * Position / Mic-E decode + Maidenhead display are local parse/UI.
- * TX: New n-N digipeater (WB2OSZ-style) — not raw AX.25 echo.
+ * TX digi: OFF (RX only), n-N (WB2OSZ-style), or raw AX.25 echo.
  *
  * Behaviour: side-key ACTION_APRS → DISPLAY_APRS @ 144.640 FM → listen →
- * on FCS-OK frame show call / grid / comment; digipeat only when path matches.
+ * on FCS-OK frame show call / grid / comment; digipeat per DgPeat mode.
  */
 
 #ifdef ENABLE_APRS
@@ -200,8 +200,6 @@ static uint8_t APRS_BuildDigi(const uint8_t *in, uint16_t in_len, uint8_t *out, 
 
 	if (in_len < 20u || in_len > out_max || gAPRS_DigiCall[0] == 0)
 		return 0;
-	if ((gAPRS_DigiFlags & APRS_DIGI_FLAG_ON) == 0)
-		return 0;
 
 	for (;;) {
 		if (addr_end + 7u > in_len - 2u)
@@ -274,12 +272,23 @@ static uint8_t APRS_BuildDigi(const uint8_t *in, uint16_t in_len, uint8_t *out, 
 
 static void APRS_ConsiderDigipeat(const uint8_t *frame, uint16_t len)
 {
+	const uint8_t mode = (uint8_t)(gAPRS_DigiFlags & APRS_DIGI_MODE_MASK);
 	uint16_t h;
 	uint8_t  n;
 
-	if (gRexmitCooldown || len < 20u || len > sizeof(gLastFrame))
+	if (mode == APRS_DIGI_MODE_OFF || gRexmitCooldown ||
+	    len < 20u || len > sizeof(gLastFrame))
 		return;
 
+	if (mode == APRS_DIGI_MODE_ECHO) {
+		memcpy(gLastFrame, frame, len);
+		gPendingDupeHash = 0;
+		gLastLen         = (uint8_t)len;
+		gNeedRexmit      = true;
+		return;
+	}
+
+	/* n-N */
 	h = APRS_DupeHash(frame, len);
 	if (APRS_DupeHit(h))
 		return; /* dupe: still shown, no TX */
@@ -397,7 +406,8 @@ static bool APRS_TransmitBell202(const uint8_t *frame, uint16_t frame_len)
 
 	gTxCooldown     = 2; /* 1 s */
 	gRexmitCooldown = 6; /* 3 s ignore own RF loop */
-	APRS_DupeAdd(gPendingDupeHash);
+	if (gPendingDupeHash)
+		APRS_DupeAdd(gPendingDupeHash);
 	return true;
 }
 
