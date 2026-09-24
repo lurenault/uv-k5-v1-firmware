@@ -240,10 +240,8 @@ static void HandleIncoming(void)
 
 		// DTMF DCD is enabled
 		DTMF_HandleRequest();
-		if (gDTMF_CallState == DTMF_CALL_STATE_NONE) {
-			if (gRxReceptionMode != RX_MODE_DETECTED) {
-				return;
-			}
+		if ((gDTMF_CallState == DTMF_CALL_STATE_NONE) && (gRxReceptionMode == RX_MODE_DETECTED)) {
+			
 			gDualWatchCountdown_10ms = dual_watch_count_after_1_10ms;
 			gScheduleDualWatch       = false;
 

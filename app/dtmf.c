@@ -155,7 +155,7 @@ bool DTMF_FindContact(const char *pContact, char *pResult)
 			return false;
 		}
 
-		if (memcmp(pContact, Contact + 8, 3) == 0) {
+		if ((memcmp(pContact, Contact + 8, 3) == 0) && (memcmp(pContact, gEeprom.ANI_DTMF_ID, 3) != 0)) {
 			memcpy(pResult, Contact, 8);
 			pResult[8] = 0;
 			return true;
