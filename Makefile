@@ -50,6 +50,16 @@ ENABLE_SCAN_RANGES            ?= 1
 ENABLE_DIGMODE                ?= 0
 # Minimal APRS TX/RX (ta1js Bell202/HDLC)
 ENABLE_APRS                   ?= 0
+# DTMF Digital protocol for smart calls and text messages; requires ENABLE_DTMF_CALLING
+ENABLE_DTMF_DIGITAL			  ?= 1
+# CAT remote control (PC serial); requires ENABLE_UART=1
+ENABLE_CATMODE                ?= 1
+
+ifeq ($(ENABLE_DTMF_DIGITAL),1)
+ifneq ($(ENABLE_DTMF_CALLING),1)
+$(error ENABLE_DTMF_DIGITAL=1 requires ENABLE_DTMF_CALLING=1)
+endif
+endif
 
 ifeq ($(ENABLE_DIGMODE),1)
 ifneq ($(ENABLE_UART),1)
@@ -57,8 +67,6 @@ $(error ENABLE_DIGMODE=1 requires ENABLE_UART=1)
 endif
 endif
 
-# CAT remote control (PC serial); requires ENABLE_UART=1
-ENABLE_CATMODE                ?= 1
 
 ifeq ($(ENABLE_CATMODE),1)
 ifneq ($(ENABLE_UART),1)
@@ -142,6 +150,10 @@ OBJS += app/chFrScanner.o
 OBJS += app/common.o
 ifeq ($(ENABLE_DTMF),1)
 OBJS += app/dtmf.o
+ifeq ($(ENABLE_DTMF_DIGITAL),1)
+OBJS += ui/dtmfdigi.o
+OBJS += app/dtmfdigi.o
+endif
 endif
 ifeq ($(ENABLE_FLASHLIGHT),1)
 	OBJS += app/flashlight.o
@@ -253,7 +265,7 @@ endif
 # If there is still no VERSION_STRING we need to make one.
 # It is needed for the firmware packing script
 ifeq (, $(VERSION_STRING))
-	VERSION_STRING := NOGIT
+	VERSION_STRING := "NOGIT SWAK"
 endif
 #VERSION_STRING := 230930b
 
@@ -416,6 +428,9 @@ ifeq ($(ENABLE_DTMF),1)
 	CFLAGS  += -DENABLE_DTMF
 ifeq ($(ENABLE_DTMF_CALLING),1)
 	CFLAGS  += -DENABLE_DTMF_CALLING
+ifeq ($(ENABLE_DTMF_DIGITAL),1)
+	CFLAGS  += -DENABLE_DTMF_DIGITAL
+endif
 endif
 endif
 ifeq ($(ENABLE_AGC_SHOW_DATA),1)

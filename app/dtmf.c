@@ -33,6 +33,7 @@
 #include "misc.h"
 #include "settings.h"
 #include "ui/ui.h"
+#include "app/dtmfdigi.h"
 
 char              gDTMF_String[15];
 
@@ -74,6 +75,9 @@ void DTMF_clear_RX(void)
 	gDTMF_RX_timeout = 0;
 	gDTMF_RX_index   = 0;
 	gDTMF_RX_pending = false;
+#ifdef ENABLE_DTMF_DIGITAL
+	DTMFDIGI_DecodePacket();
+#endif
 	memset(gDTMF_RX, 0, sizeof(gDTMF_RX));
 }
 #endif

@@ -51,6 +51,9 @@
 #ifdef ENABLE_APRS
 	#include "app/aprs.h"
 #endif
+#ifdef ENABLE_DTMF_DIGITAL
+	#include "app/dtmfdigi.h"
+#endif
 #include "ARMCM0.h"
 #include "audio.h"
 #include "board.h"
@@ -118,6 +121,10 @@ void (*ProcessKeysFunctions[])(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld) 
 
 #ifdef ENABLE_APRS
 	[DISPLAY_APRS] = &APRS_ProcessKeys,
+#endif
+
+#ifdef ENABLE_DTMF_DIGITAL
+	[DISPLAY_DTMFDIGI] = &DTMFDIGI_ProcessKeys,
 #endif
 
 };
@@ -669,7 +676,11 @@ static void CheckRadioInterrupts(void)
 						gDTMF_RX_pending           = true;
 
 						SYSTEM_DelayMs(3);//fix DTMF not reply@Yurisu
+#ifdef ENABLE_DTMF_DIGITAL
+						DTMFDIGI_HandleRequest();
+#else
 						DTMF_HandleRequest();
+#endif
 					}
 #endif
 				}

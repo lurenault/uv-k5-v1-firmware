@@ -38,6 +38,9 @@
 #ifdef ENABLE_FMRADIO
 	#include "ui/fmradio.h"
 #endif
+#ifdef ENABLE_DTMF_DIGITAL
+	#include "ui/dtmfdigi.h"
+#endif
 #include "ui/inputbox.h"
 #include "ui/main.h"
 #include "ui/menu.h"
@@ -72,6 +75,10 @@ void (*UI_DisplayFunctions[])(void) = {
 
 #ifdef ENABLE_APRS
 	[DISPLAY_APRS] = &UI_DisplayAPRS,
+#endif
+
+#ifdef ENABLE_DTMF_DIGITAL
+	[DISPLAY_DTMFDIGI] = &UI_DisplayDTMFDigi,
 #endif
 
 };

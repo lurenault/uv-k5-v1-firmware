@@ -23,6 +23,9 @@
 #ifdef ENABLE_FMRADIO
 	#include "app/fm.h"
 #endif
+#ifdef ENABLE_DTMF_DIGITAL
+	#include "app/dtmfdigi.h"
+#endif
 #include "app/generic.h"
 #include "app/main.h"
 #include "app/scanner.h"
@@ -251,7 +254,6 @@ static void processFKeyFunction(const KEY_Code_t Key, const bool beep)
 			if (beep)
 				gBeepToPlay = BEEP_500HZ_60MS_DOUBLE_BEEP_OPTIONAL;
 			break;
-
 		default:
 			gUpdateStatus   = true;
 			gWasFKeyPressed = false;
@@ -488,6 +490,7 @@ static void MAIN_Key_EXIT(bool bKeyPressed, bool bKeyHeld)
 
 static void MAIN_Key_MENU(const bool bKeyPressed, const bool bKeyHeld)
 {
+
 	if (bKeyPressed && !bKeyHeld) // menu key pressed
 		gBeepToPlay = BEEP_1KHZ_60MS_OPTIONAL;
 
@@ -527,6 +530,17 @@ static void MAIN_Key_MENU(const bool bKeyPressed, const bool bKeyHeld)
 			}
 
 			gFlagRefreshSetting = true;
+
+		#ifdef ENABLE_DTMF_DIGITAL
+			// Verify if Function key was pressed, if not open menu
+			if (gWasFKeyPressed)
+			{
+				gWasFKeyPressed = false;
+				APP_RunDTMFDigi();
+				GUI_SelectNextDisplay(DISPLAY_DTMFDIGI);
+				return;
+			}
+		#endif
 			gRequestDisplayScreen = DISPLAY_MENU;
 			#ifdef ENABLE_VOICE
 				gAnotherVoiceID   = VOICE_ID_MENU;

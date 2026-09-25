@@ -42,6 +42,10 @@ enum GUI_DisplayType_t
 	DISPLAY_APRS,
 #endif
 
+#ifdef ENABLE_DTMF_DIGITAL
+	DISPLAY_DTMFDIGI,
+#endif
+
 	DISPLAY_N_ELEM,
 	DISPLAY_INVALID = 0xFFu
 };

@@ -54,6 +54,9 @@ inline static void ACTION_1750() { ACTION_AlarmOr1750(true); };
 #ifdef ENABLE_APRS
 #include "app/aprs.h"
 #endif
+#ifdef ENABLE_DTMF_DIGITAL
+#include "app/dtmfdigi.h"
+#endif
 
 inline static void ACTION_ScanRestart() { ACTION_Scan(true); };
 
@@ -110,6 +113,12 @@ void (*action_opt_table[])(void) = {
 	[ACTION_OPT_APRS] = &ACTION_APRS,
 #else
 	[ACTION_OPT_APRS] = &FUNCTION_NOP,
+#endif
+
+#ifdef ENABLE_DTMF_DIGITAL
+	[ACTION_OPT_DTMFDIGI] = &APP_RunDTMFDigi,
+#else
+	[ACTION_OPT_DTMFDIGI] = &FUNCTION_NOP,
 #endif
 };
 
