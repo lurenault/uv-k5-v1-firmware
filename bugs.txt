@@ -1,2 +1,4 @@
 26/09/2026: Se si prova a trasmettere un pacchetto con modulazione CW e poi si prova a ritrasmettere
-            lo stesso in FM, la trasmissione non avviene e bisogna resettare la radio
+            lo stesso in FM, la trasmissione non avviene e bisogna resettare la radio. Sembrerebbe 
+            affliggere anche la trasmissione di semplici toni DTMF tramite le librerie di sistema già
+            presenti

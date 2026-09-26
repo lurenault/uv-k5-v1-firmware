@@ -61,15 +61,108 @@
 #include "ui/ui.h"
 #include "app/dtmf.h"
 #include "driver/bk4819.h"
-#include "functions.h"
+#include "ui/dtmfdigi.h"
+#include <string.h>
+#include <stdlib.h>  // abs()
 
-uint8_t gDTMFDIGI_request_stage = 0; // 0: waiting for first recognition tone, 1: waiting for second recognition tone, 2: waiting for data packet
-bool gDTMFDIGI_standard_handle = false; // true: use standard DTMF handle, false: use Digital DTMF handle
-char gDTMFDIGI_RawPacket[80]; // Buffer for received DTMF tones
-uint8_t gDTMFDIGI_RawPacket_length = 0; // Length of the received DTMF tones
-DTMF_Packet gDTMFDIGI_Packet; // Structure to hold the parsed packet data
-uint8_t gDTMFDIGI_caller; 
-bool gDTMFDIGI_comm_open = false;   // true: communicating with someone
+uint8_t     gDTMFDIGI_request_stage = 0;        // 0: waiting for first recognition tone, 1: waiting for second recognition tone, 2: waiting for data packet
+bool        gDTMFDIGI_standard_handle = false;  // true: use standard DTMF handle, false: use Digital DTMF handle
+char        gDTMFDIGI_RawPacket[80];            // Buffer for received DTMF tones
+uint8_t     gDTMFDIGI_RawPacket_length = 0;     // Length of the received DTMF tones
+DTMF_Packet gDTMFDIGI_Packet;                   // Structure to hold the parsed packet data
+uint8_t     gDTMFDIGI_caller;                   // Caller ID
+uint8_t     gDTMFDIGI_callee;                   // Callee ID
+bool        forceExit = false;                  // If set exits the app
+uint8_t     gDTMFDIGI_comm_status;              // Communication status (See dtmfdigi.h)
+uint8_t     gDTMFDIGI_msgLen;                   // Message length
+uint8_t     gDTMFDIGI_msgPackets;               // Message packets
+bool        gDTMFDIGI_receiveEN = true;         // Packet reception enabled
+uint8_t     gDTMFDIGI_callStatus;               // Call status
+uint8_t     gDTMFDIGI_ring=30;                  // Ringtone duration
+bool        gDTMFDIGI_sendACK;                  // If true, overrides pending packet and sends ACK
+uint8_t     gDTMFDIGI_otherRadio;               //
+
+uint16_t GetMyANI()
+{
+    return DTMFDGI_DTMFToNibble(gEeprom.ANI_DTMF_ID[0])*100+DTMFDGI_DTMFToNibble(gEeprom.ANI_DTMF_ID[1])*10+DTMFDGI_DTMFToNibble(gEeprom.ANI_DTMF_ID[2]);
+}
+
+void DTMFDIGI_SendCALLST()
+{
+    gDTMFDIGI_Packet.dataType=PACKET_TYPE_CALLST;
+    gDTMFDIGI_Packet.senderId=GetMyANI();
+    gDTMFDIGI_Packet.receiverId=gDTMFDIGI_caller;
+    gDTMFDIGI_Packet.data[0] = gDTMFDIGI_callStatus;
+    if (gDTMFDIGI_callStatus == CALL_STATUS_RINGING)
+        gDTMFDIGI_Packet.data[0] = gDTMFDIGI_callStatus | (gDTMFDIGI_ring << 2);
+    
+    DTMFDGI_generateRawPacket(&gDTMFDIGI_Packet,gDTMFDIGI_RawPacket);
+    DTMFDIGI_SendRawPacket();
+    
+}
+
+void DTMFDIGI_SendACK(uint8_t receiver)
+{
+    gDTMFDIGI_Packet.dataType=PACKET_TYPE_ACK;
+    gDTMFDIGI_Packet.receiverId=receiver;
+    gDTMFDIGI_Packet.senderId=GetMyANI();
+    gDTMFDIGI_RawPacket_length=DTMFDGI_generateRawPacket(&gDTMFDIGI_Packet, gDTMFDIGI_RawPacket);
+    DTMFDIGI_SendRawPacket();
+}
+
+void DTMFDIGI_SendRawPacket()
+{
+    RADIO_PrepareTX();
+    BK4819_EnterDTMF_TX(false);
+    gDTMFDIGI_RawPacket[gDTMFDIGI_RawPacket_length] = '\0';
+    BK4819_PlayDTMFString(gDTMFDIGI_RawPacket, true, 200, 200, 200, 200);
+    BK4819_ExitDTMF_TX(true);
+    FUNCTION_Select(FUNCTION_RECEIVE);
+}
+
+void DTMFDIGI_Proces_DEBUG(KEY_Code_t Key)
+{
+    if (Key == KEY_EXIT)
+        DTMFDIGI_RestoreDisplay();
+}
+
+void DTMFDIGI_Proces_MAIN(KEY_Code_t Key)
+{
+    if (Key == KEY_UP)
+    {
+        if (DTMFDIGI_menuItem == 0)
+        {
+            while (DTMFDIGI_menuItem < 64)
+            {
+                if (DTMFDIGI_MENU_ITEMS[DTMFDIGI_menuItem] == NULL)
+                {
+                    DTMFDIGI_menuItem--;
+                    break;
+                }
+                DTMFDIGI_menuItem++;
+            }
+        }
+        else
+            DTMFDIGI_menuItem--;
+        
+        DTMFDIGI_updateDisplay = true;
+    }
+    else if (Key == KEY_DOWN)
+    {
+        DTMFDIGI_menuItem++;
+        if (DTMFDIGI_MENU_ITEMS[DTMFDIGI_menuItem] == NULL)
+            DTMFDIGI_menuItem = 0;
+
+        DTMFDIGI_updateDisplay = true;
+    }
+    else if (Key == KEY_MENU)
+    {
+        if (DTMFDIGI_menuItem == 2)
+            DTMFDIGI_SwitchDisplay(DTMFDIGI_DISPL_DEBUG,DTMFDIGI_DISPL_MAIN);
+    }
+    else if (Key == KEY_EXIT)
+        forceExit = true;
+}
 
 void DTMFDIGI_DecodePacket()
 {
@@ -79,6 +172,8 @@ void DTMFDIGI_DecodePacket()
         return; // If standard handle is true, do not decode the packet
     }
 
+
+    DTMFDIGI_ForceUpdate(DTMFDIGI_DISPL_DEBUG);
     if (gDTMFDIGI_request_stage != 0x02)
         return;
     
@@ -114,12 +209,46 @@ void DTMFDIGI_DecodePacket()
         case PACKET_TYPE_CALLRQ:
             break;
         case PACKET_TYPE_MSGRQ:
+            if(gDTMFDIGI_RawPacket_length != 13 )
+            {
+                gDTMFDIGI_Packet.error = PACKET_ERROR_INVALID_LENGTH;
+                return;
+            }
+            gDTMFDIGI_msgPackets = DTMFDGI_DTMFToNibble(gDTMFDIGI_RawPacket[10]);   // Number of packets
+            gDTMFDIGI_msgLen = (DTMFDGI_DTMFToNibble(gDTMFDIGI_RawPacket[11]) << 4)|(DTMFDGI_DTMFToNibble(gDTMFDIGI_RawPacket[12]));
+            myChecksum += gDTMFDIGI_msgPackets+DTMFDGI_DTMFToNibble(gDTMFDIGI_RawPacket[11])+DTMFDGI_DTMFToNibble(gDTMFDIGI_RawPacket[12]);
             break;
         case PACKET_TYPE_ACK:
             break;
         case PACKET_TYPE_MSG:
+            if ( gDTMFDIGI_RawPacket_length < 14 ) // <14 instead of <13 makes it impossible to receive an empty packet
+            {
+                gDTMFDIGI_Packet.error = PACKET_ERROR_INVALID_LENGTH;
+                return;
+            }
+
+            gDTMFDIGI_Packet.packet_num = DTMFDGI_DTMFToNibble(gDTMFDIGI_RawPacket[10]); // Get packet number
+            gDTMFDIGI_Packet.msgDataLength = DTMFDGI_DTMFToNibble(gDTMFDIGI_RawPacket[11]); // Packet length
+            
+            if (gDTMFDIGI_RawPacket_length != 12 + gDTMFDIGI_Packet.msgDataLength)
+            {
+                gDTMFDIGI_Packet.error = PACKET_ERROR_INVALID_LENGTH;
+                return;
+            }
+
+            //Update checksum based on data
+            myChecksum += gDTMFDIGI_Packet.packet_num + gDTMFDIGI_Packet.msgDataLength;
+
+            for (uint8_t i = 12; i<gDTMFDIGI_RawPacket_length; i++)
+                myChecksum += DTMFDGI_DTMFToNibble(gDTMFDIGI_RawPacket[i]);
             break;
         case PACKET_TYPE_CALLST:
+            if(gDTMFDIGI_RawPacket_length != 11)
+            {
+                gDTMFDIGI_Packet.error = PACKET_ERROR_INVALID_LENGTH;
+                return;
+            }
+            myChecksum += DTMFDGI_DTMFToNibble(gDTMFDIGI_RawPacket[10]);
             break;
         case PACKET_TYPE_BADPKT:
             break;
@@ -130,7 +259,7 @@ void DTMFDIGI_DecodePacket()
             break;
     }
 
-    gDTMFDIGI_RawPacket_length = 0;
+    //gDTMFDIGI_RawPacket_length = 0;
 
     if (gDTMFDIGI_Packet.error == PACKET_ERROR_NONE)
     {
@@ -138,16 +267,41 @@ void DTMFDIGI_DecodePacket()
             gDTMFDIGI_Packet.error = PACKET_ERROR_CHECKSUM;
     }
 
-    gDTMFDIGI_Packet.checksumt = myChecksum;
+    if (gDTMFDIGI_Packet.receiverId != GetMyANI())      // If the receiverid is different than the radio ani-id, we are done
+        return;
 
+    if (gDTMFDIGI_Packet.error == PACKET_ERROR_NONE)
+    {
+        // Update status and let specified functions take control
+        if (gDTMFDIGI_comm_status == COMM_STATUS_CLOSED)
+        {
+            if (gDTMFDIGI_Packet.dataType == PACKET_TYPE_CALLRQ)
+            {
+                // Someone wants to call us
+                gDTMFDIGI_caller = gDTMFDIGI_Packet.senderId;
+                gDTMFDIGI_comm_status = COMM_STATUS_CALLREQ_IN;
+                gDTMFDIGI_otherRadio = gDTMFDIGI_caller;
+                gDTMFDIGI_sendACK = true;
+
+                //FUNCTION_Select(FUNCTION_RECEIVE);
+            }
+        }
+        
+
+        return;
+    }
+    
+    // Error management
 }
     
 void DTMFDIGI_HandleRequest(void){
     if (gDTMF_RX_pending && !gDTMFDIGI_standard_handle)
     {
+        DTMFDIGI_ForceUpdate(DTMFDIGI_DISPL_DEBUG);
         switch (gDTMFDIGI_request_stage)
         {
             case 0: // waiting for first recognition tone
+                gDTMFDIGI_Packet.processed = false;
                 gDTMFDIGI_RawPacket_length = 0; // reset raw packet length
                 if (gDTMF_RX[0] == '*')
                 {
@@ -190,26 +344,47 @@ void DTMFDIGI_HandleRequest(void){
 }
 
 void DTMFDIGI_ProcessKeys(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld){
-    if (Key == KEY_EXIT && bKeyPressed && !bKeyHeld)
+    if (forceExit)
     {
         GUI_SelectNextDisplay(DISPLAY_MAIN);
+        gRequestDisplayScreen = DISPLAY_MAIN;
+        return;
     }
-    else if (Key == KEY_PTT && bKeyPressed && !bKeyHeld)
-    {
-        // Handle PTT key press
-        // For example, you might want to start transmitting a DTMF packet here
-        DTMF_Packet packet;
-        packet.dataType = PACKET_TYPE_CALLRQ; // Example: Call request
-        packet.senderId = 123; // Example sender ID
-        packet.receiverId = 456; // Example receiver ID
-        char rawPacket[50]; // Buffer to hold the generated raw packet
-        DTMFDGI_generateRawPacket(&packet, rawPacket); // Generate the raw DTMF packet
 
-        RADIO_PrepareTX();
-        BK4819_EnterDTMF_TX(false); // Start DTMF transmission without local loopback
-        BK4819_PlayDTMFString(rawPacket, true, 200, 200, 200, 100); // Example: Send a test DTMF sequence
-        BK4819_ExitDTMF_TX(true); // Exit DTMF transmission without keeping the state
-        FUNCTION_Select(FUNCTION_RECEIVE);
+    if (gDTMFDIGI_sendACK)
+    {
+        if (FUNCTION_IsRx())
+        {
+            gDTMFDIGI_sendACK = false;
+            DTMFDIGI_SendACK(gDTMFDIGI_otherRadio);
+        }
+    }
+    else if (FUNCTION_IsRx())
+    {
+        if (gDTMFDIGI_callStatus == COMM_STATUS_CALLREQ_IN)
+        {
+            // We're accepting the call, so send CALLST=RING
+            gDTMFDIGI_callStatus = CALL_STATUS_RINGING;
+            gDTMFDIGI_comm_status = COMM_STATUS_CALL_IN;
+            DTMFDIGI_SendCALLST();
+        }
+    }
+    
+    if ( !bKeyPressed && !bKeyHeld )
+    {
+        switch(DTMFDIGI_displayn)
+        {
+            case DTMFDIGI_DISPL_MAIN:
+                DTMFDIGI_Proces_MAIN(Key);
+                break;
+            case DTMFDIGI_DISPL_DEBUG:
+                DTMFDIGI_Proces_DEBUG(Key);
+                break;
+        }
+    }
+    else if ( bKeyPressed && bKeyHeld && (Key == KEY_EXIT))
+    {
+        GUI_SelectNextDisplay(DISPLAY_MAIN);
     }
 }
 
@@ -338,5 +513,18 @@ void APP_RunDTMFDigi(void)
     // Initialize DTMF Digital mode
     //BK4819_PlayDTMF('*'); // Send recognition sequence
     // Check if selected DTMF decode is enabled on selected channel
+
+    forceExit = false;
+    DTMFDIGI_InitDisplay();
+    gDTMFDIGI_comm_status = COMM_STATUS_CLOSED; // No communication in or out
+    gDTMFDIGI_sendACK = false;
+
+    // Check for errors
+    if ((gEeprom.VfoInfo[gEeprom.TX_VFO].Modulation == MODULATION_CW) || (gEeprom.VfoInfo[gEeprom.TX_VFO].Modulation == MODULATION_UKNOWN))
+        DTMFDIGI_displayn = DTMFDIGI_DISPL_MODERR;
+    else if (TX_freq_check(gCurrentVfo->pTX->Frequency)!=0)
+        DTMFDIGI_displayn = DTMFDIGI_DISPL_TXERR;
+    else if (gCurrentVfo->DTMF_DECODING_ENABLE == 0)
+        DTMFDIGI_displayn = DTMFDIGI_DISPL_DTMFERR;
 }
 #endif
