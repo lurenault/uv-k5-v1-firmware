@@ -59,6 +59,8 @@ extern char         gDTMFDIGI_RawPacket[80];    // Buffer for received DTMF tone
 extern uint8_t      gDTMFDIGI_RawPacket_length; // Length of the received DTMF tones
 extern DTMF_Packet  gDTMFDIGI_Packet;           // Structure to hold the parsed packet data
 extern uint8_t      gDTMFDIGI_request_stage;
+extern uint8_t      gDTMFDIGI_callStatus;
+extern uint8_t      gDTMFDIGI_comm_status;
 extern bool         forceExit;
 extern bool         gDTMFDIGI_standard_handle;  // Flag to indicate if standard DTMF handling should be used
 
@@ -75,5 +77,6 @@ void DTMFDIGI_SendRawPacket();
 void DTMFDIGI_SendACK(uint8_t receiver);
 uint16_t GetMyANI();
 void DTMFDIGI_SendCALLST();
+void DTMFDIGI_Process(void);
 
 #endif

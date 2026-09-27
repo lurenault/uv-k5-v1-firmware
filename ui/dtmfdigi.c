@@ -148,11 +148,11 @@ void DTMFDIGI_UpdateMenu(void)
 
 
 void DTMFDIGI_UpdateDebug(void)
-{/*
+{
     UI_PrintString("DEBUG",0,LCD_WIDTH,0,8);
     if ((gDTMFDIGI_request_stage != 0x02) && (!gDTMFDIGI_Packet.processed))
     {
-        UI_PrintStringSmallNormal("Wait for sync",2,0,2);
+        UI_PrintStringSmallNormal("SWAIT",2,0,2);
         return;
     }
 
@@ -185,8 +185,11 @@ void DTMFDIGI_UpdateDebug(void)
     gDTMFDIGI_RawPacket[gDTMFDIGI_RawPacket_length] = '\0';
     UI_PrintStringSmallNormal(gDTMFDIGI_RawPacket,2,0,4);
 
+    sprintf(String,"CLL:%02X COMM:%02X", gDTMFDIGI_callStatus, gDTMFDIGI_comm_status);
+    UI_PrintStringSmallNormal(String,2,0,5);
+
     //String = "COMM"
-*/}
+}
 
 
 void DTMFDIGI_ForceUpdate(uint8_t screen)

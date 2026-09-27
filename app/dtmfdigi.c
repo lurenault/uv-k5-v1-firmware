@@ -95,10 +95,10 @@ void DTMFDIGI_SendCALLST()
     gDTMFDIGI_Packet.data[0] = gDTMFDIGI_callStatus;
     if (gDTMFDIGI_callStatus == CALL_STATUS_RINGING)
         gDTMFDIGI_Packet.data[0] = gDTMFDIGI_callStatus | (gDTMFDIGI_ring << 2);
+    gDTMFDIGI_Packet.dataLength = 1;
     
-    DTMFDGI_generateRawPacket(&gDTMFDIGI_Packet,gDTMFDIGI_RawPacket);
+    gDTMFDIGI_RawPacket_length = DTMFDGI_generateRawPacket(&gDTMFDIGI_Packet,gDTMFDIGI_RawPacket);
     DTMFDIGI_SendRawPacket();
-    
 }
 
 void DTMFDIGI_SendACK(uint8_t receiver)
@@ -124,6 +124,11 @@ void DTMFDIGI_Proces_DEBUG(KEY_Code_t Key)
 {
     if (Key == KEY_EXIT)
         DTMFDIGI_RestoreDisplay();
+    else if (Key == KEY_STAR)
+    {
+        APP_RunDTMFDigi();
+        DTMFDIGI_SwitchDisplay(DTMFDIGI_DISPL_DEBUG, DTMFDIGI_DISPL_MAIN);
+    }
 }
 
 void DTMFDIGI_Proces_MAIN(KEY_Code_t Key)
@@ -343,33 +348,37 @@ void DTMFDIGI_HandleRequest(void){
     DTMF_HandleRequest(); // call the standard DTMF handle function
 }
 
-void DTMFDIGI_ProcessKeys(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld){
+void DTMFDIGI_Process(void)
+{
     if (forceExit)
     {
         GUI_SelectNextDisplay(DISPLAY_MAIN);
-        gRequestDisplayScreen = DISPLAY_MAIN;
         return;
     }
 
+    if (gCurrentFunction == FUNCTION_TRANSMIT)
+        return;
+
     if (gDTMFDIGI_sendACK)
     {
-        if (FUNCTION_IsRx())
-        {
-            gDTMFDIGI_sendACK = false;
-            DTMFDIGI_SendACK(gDTMFDIGI_otherRadio);
-        }
+        gDTMFDIGI_sendACK = false;
+        DTMFDIGI_SendACK(gDTMFDIGI_otherRadio);
     }
-    else if (FUNCTION_IsRx())
+    else
     {
-        if (gDTMFDIGI_callStatus == COMM_STATUS_CALLREQ_IN)
+        if (gDTMFDIGI_comm_status == COMM_STATUS_CALLREQ_IN)
         {
             // We're accepting the call, so send CALLST=RING
             gDTMFDIGI_callStatus = CALL_STATUS_RINGING;
             gDTMFDIGI_comm_status = COMM_STATUS_CALL_IN;
+            
             DTMFDIGI_SendCALLST();
         }
     }
     
+}
+
+void DTMFDIGI_ProcessKeys(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld){
     if ( !bKeyPressed && !bKeyHeld )
     {
         switch(DTMFDIGI_displayn)

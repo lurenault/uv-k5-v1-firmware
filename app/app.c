@@ -1307,6 +1307,10 @@ void APP_TimeSlice10ms(void)
 	}
 #endif
 
+#ifdef ENABLE_DTMF_DIGITAL
+	DTMFDIGI_Process();
+#endif
+
 	CheckKeys();
 }
 
