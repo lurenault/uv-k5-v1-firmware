@@ -15,7 +15,7 @@ ENABLE_TX1750                 ?= 0
 ENABLE_PWRON_PASSWORD         ?= 0
 ENABLE_DTMF                   ?= 1
 ENABLE_DTMF_CALLING           ?= 1
-ENABLE_FLASHLIGHT             ?= 1
+ENABLE_FLASHLIGHT             ?= 0
 
 # Total DTMF off: ignore CALLING and do not define it
 ifeq ($(ENABLE_DTMF),0)
@@ -78,6 +78,7 @@ endif
 ENABLE_AM_FIX_SHOW_DATA       ?= 0
 ENABLE_AGC_SHOW_DATA          ?= 0
 ENABLE_UART_RW_BK_REGS        ?= 0
+ENABLE_DTMFDIGI_DEBUG		  ?= 1
 
 # ---- COMPILER/LINKER OPTIONS ----
 ENABLE_CLANG                  ?= 0
@@ -309,6 +310,9 @@ CFLAGS += -DENABLE_SPECTRUM
 endif
 ifeq ($(ENABLE_SWD),1)
 	CFLAGS += -DENABLE_SWD
+endif
+ifeq ($(ENABLE_DTMFDIGI_DEBUG),1)
+	CFLAGS += -DENABLE_DTMFDIGI_DEBUG
 endif
 ifeq ($(ENABLE_OVERLAY),1)
 	CFLAGS += -DENABLE_OVERLAY

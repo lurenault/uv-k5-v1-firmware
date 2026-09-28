@@ -61,6 +61,7 @@ extern DTMF_Packet  gDTMFDIGI_Packet;           // Structure to hold the parsed 
 extern uint8_t      gDTMFDIGI_request_stage;
 extern uint8_t      gDTMFDIGI_callStatus;
 extern uint8_t      gDTMFDIGI_comm_status;
+extern uint16_t     gMyANI;
 extern bool         forceExit;
 extern bool         gDTMFDIGI_standard_handle;  // Flag to indicate if standard DTMF handling should be used
 
@@ -72,11 +73,16 @@ void DTMFDIGI_HandleRequest(void);
 uint8_t DTMFDGI_DTMFToNibble(char dtmf);
 void DTMFDIGI_DecodePacket();
 void DTMFDIGI_Proces_MAIN(KEY_Code_t Key);
-void DTMFDIGI_Proces_DEBUG(KEY_Code_t Key);
 void DTMFDIGI_SendRawPacket();
 void DTMFDIGI_SendACK(uint8_t receiver);
-uint16_t GetMyANI();
+//uint16_t GetMyANI();
 void DTMFDIGI_SendCALLST();
 void DTMFDIGI_Process(void);
+void DTMFDIGI_GenerateSend(void);
+void DTMFDIGI_Init(void);
+
+#ifdef ENABLE_DTMFDIGI_DEBUG
+void DTMFDIGI_Proces_DEBUG(KEY_Code_t Key);
+#endif
 
 #endif

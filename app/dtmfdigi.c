@@ -64,6 +64,7 @@
 #include "ui/dtmfdigi.h"
 #include <string.h>
 #include <stdlib.h>  // abs()
+#include "driver/system.h"
 
 uint8_t     gDTMFDIGI_request_stage = 0;        // 0: waiting for first recognition tone, 1: waiting for second recognition tone, 2: waiting for data packet
 bool        gDTMFDIGI_standard_handle = false;  // true: use standard DTMF handle, false: use Digital DTMF handle
@@ -81,31 +82,40 @@ uint8_t     gDTMFDIGI_callStatus;               // Call status
 uint8_t     gDTMFDIGI_ring=30;                  // Ringtone duration
 bool        gDTMFDIGI_sendACK;                  // If true, overrides pending packet and sends ACK
 uint8_t     gDTMFDIGI_otherRadio;               //
+bool        gDTMFDIGI_waitACK;                  // If true, waits for ACK
+uint16_t    gMyANI;
+bool        gDTMFDIGI_init=true;
 
-uint16_t GetMyANI()
+const char DTMFCHARS[]="0123456789ABCD*#";
+
+/*uint16_t GetMyANI()
 {
     return DTMFDGI_DTMFToNibble(gEeprom.ANI_DTMF_ID[0])*100+DTMFDGI_DTMFToNibble(gEeprom.ANI_DTMF_ID[1])*10+DTMFDGI_DTMFToNibble(gEeprom.ANI_DTMF_ID[2]);
-}
+}*/
 
 void DTMFDIGI_SendCALLST()
 {
     gDTMFDIGI_Packet.dataType=PACKET_TYPE_CALLST;
-    gDTMFDIGI_Packet.senderId=GetMyANI();
     gDTMFDIGI_Packet.receiverId=gDTMFDIGI_caller;
-    gDTMFDIGI_Packet.data[0] = gDTMFDIGI_callStatus;
-    if (gDTMFDIGI_callStatus == CALL_STATUS_RINGING)
-        gDTMFDIGI_Packet.data[0] = gDTMFDIGI_callStatus | (gDTMFDIGI_ring << 2);
+    gDTMFDIGI_Packet.data[0] = gDTMFDIGI_callStatus | ((gDTMFDIGI_callStatus == CALL_STATUS_RINGING) ? (gDTMFDIGI_ring << 2) : 0x00);
+    /*if (gDTMFDIGI_callStatus == CALL_STATUS_RINGING)
+        gDTMFDIGI_Packet.data[0] = gDTMFDIGI_callStatus | (gDTMFDIGI_ring << 2);*/
     gDTMFDIGI_Packet.dataLength = 1;
     
-    gDTMFDIGI_RawPacket_length = DTMFDGI_generateRawPacket(&gDTMFDIGI_Packet,gDTMFDIGI_RawPacket);
-    DTMFDIGI_SendRawPacket();
+    DTMFDIGI_GenerateSend();
+    gDTMFDIGI_waitACK = true;
 }
 
 void DTMFDIGI_SendACK(uint8_t receiver)
 {
     gDTMFDIGI_Packet.dataType=PACKET_TYPE_ACK;
     gDTMFDIGI_Packet.receiverId=receiver;
-    gDTMFDIGI_Packet.senderId=GetMyANI();
+    DTMFDIGI_GenerateSend();
+}
+
+void DTMFDIGI_GenerateSend(void)
+{
+    gDTMFDIGI_Packet.senderId=gMyANI;
     gDTMFDIGI_RawPacket_length=DTMFDGI_generateRawPacket(&gDTMFDIGI_Packet, gDTMFDIGI_RawPacket);
     DTMFDIGI_SendRawPacket();
 }
@@ -113,40 +123,33 @@ void DTMFDIGI_SendACK(uint8_t receiver)
 void DTMFDIGI_SendRawPacket()
 {
     RADIO_PrepareTX();
+    SYSTEM_DelayMs(400);
     BK4819_EnterDTMF_TX(false);
     gDTMFDIGI_RawPacket[gDTMFDIGI_RawPacket_length] = '\0';
-    BK4819_PlayDTMFString(gDTMFDIGI_RawPacket, true, 200, 200, 200, 200);
+    BK4819_PlayDTMFString(gDTMFDIGI_RawPacket, true, 100, 100, 100, 100);
     BK4819_ExitDTMF_TX(true);
+    SYSTEM_DelayMs(400);
     FUNCTION_Select(FUNCTION_RECEIVE);
 }
 
+#ifdef ENABLE_DTMFDIGI_DEBUG
 void DTMFDIGI_Proces_DEBUG(KEY_Code_t Key)
 {
     if (Key == KEY_EXIT)
         DTMFDIGI_RestoreDisplay();
     else if (Key == KEY_STAR)
     {
-        APP_RunDTMFDigi();
-        DTMFDIGI_SwitchDisplay(DTMFDIGI_DISPL_DEBUG, DTMFDIGI_DISPL_MAIN);
+        DTMFDIGI_Init();
     }
 }
+#endif
 
 void DTMFDIGI_Proces_MAIN(KEY_Code_t Key)
 {
     if (Key == KEY_UP)
     {
         if (DTMFDIGI_menuItem == 0)
-        {
-            while (DTMFDIGI_menuItem < 64)
-            {
-                if (DTMFDIGI_MENU_ITEMS[DTMFDIGI_menuItem] == NULL)
-                {
-                    DTMFDIGI_menuItem--;
-                    break;
-                }
-                DTMFDIGI_menuItem++;
-            }
-        }
+            DTMFDIGI_menuItem = DTMFDIGI_MENU_LAST-1;
         else
             DTMFDIGI_menuItem--;
         
@@ -154,16 +157,20 @@ void DTMFDIGI_Proces_MAIN(KEY_Code_t Key)
     }
     else if (Key == KEY_DOWN)
     {
-        DTMFDIGI_menuItem++;
-        if (DTMFDIGI_MENU_ITEMS[DTMFDIGI_menuItem] == NULL)
-            DTMFDIGI_menuItem = 0;
+        DTMFDIGI_menuItem = (DTMFDIGI_menuItem == DTMFDIGI_MENU_LAST) ? (0) : (DTMFDIGI_menuItem+1);
+        /*if (DTMFDIGI_MENU_ITEMS[DTMFDIGI_menuItem] == NULL)
+            DTMFDIGI_menuItem = 0;*/
 
         DTMFDIGI_updateDisplay = true;
     }
     else if (Key == KEY_MENU)
     {
-        if (DTMFDIGI_menuItem == 2)
+        if (DTMFDIGI_menuItem == DTMFDIGI_MENU_CALL)
+            DTMFDIGI_SwitchDisplay(DTMFDIGI_DISPL_CONTACTS, DTMFDIGI_DISPL_MAIN);
+    #ifdef ENABLE_DTMFDIGI_DEBUG
+        else if (DTMFDIGI_menuItem == DTMFDIGI_MENU_DEBUG)
             DTMFDIGI_SwitchDisplay(DTMFDIGI_DISPL_DEBUG,DTMFDIGI_DISPL_MAIN);
+    #endif
     }
     else if (Key == KEY_EXIT)
         forceExit = true;
@@ -177,15 +184,16 @@ void DTMFDIGI_DecodePacket()
         return; // If standard handle is true, do not decode the packet
     }
 
-
+    #ifdef ENABLE_DTMFDIGI_DEBUG
     DTMFDIGI_ForceUpdate(DTMFDIGI_DISPL_DEBUG);
+    #endif
     if (gDTMFDIGI_request_stage != 0x02)
         return;
     
     gDTMFDIGI_request_stage = 0;
 
     // Now we can decode the raw packet into the DTMF_Packet structure
-    gDTMFDIGI_Packet.processed = true;              //Generate Packet processed IRQ    if (gDTMFDIGI_RawPacket_length < 10)
+    gDTMFDIGI_Packet.processed = false;              //Generate Packet processed IRQ    if (gDTMFDIGI_RawPacket_length < 10)
 
     gDTMFDIGI_Packet.error = PACKET_ERROR_NONE;
 
@@ -211,7 +219,10 @@ void DTMFDIGI_DecodePacket()
 
     switch (gDTMFDIGI_Packet.dataType)
     {
+        case PACKET_TYPE_ACK:
         case PACKET_TYPE_CALLRQ:
+        case PACKET_TYPE_BADPKT:
+        case PACKET_TYPE_MSGRF:
             break;
         case PACKET_TYPE_MSGRQ:
             if(gDTMFDIGI_RawPacket_length != 13 )
@@ -222,8 +233,6 @@ void DTMFDIGI_DecodePacket()
             gDTMFDIGI_msgPackets = DTMFDGI_DTMFToNibble(gDTMFDIGI_RawPacket[10]);   // Number of packets
             gDTMFDIGI_msgLen = (DTMFDGI_DTMFToNibble(gDTMFDIGI_RawPacket[11]) << 4)|(DTMFDGI_DTMFToNibble(gDTMFDIGI_RawPacket[12]));
             myChecksum += gDTMFDIGI_msgPackets+DTMFDGI_DTMFToNibble(gDTMFDIGI_RawPacket[11])+DTMFDGI_DTMFToNibble(gDTMFDIGI_RawPacket[12]);
-            break;
-        case PACKET_TYPE_ACK:
             break;
         case PACKET_TYPE_MSG:
             if ( gDTMFDIGI_RawPacket_length < 14 ) // <14 instead of <13 makes it impossible to receive an empty packet
@@ -255,15 +264,11 @@ void DTMFDIGI_DecodePacket()
             }
             myChecksum += DTMFDGI_DTMFToNibble(gDTMFDIGI_RawPacket[10]);
             break;
-        case PACKET_TYPE_BADPKT:
-            break;
-        case PACKET_TYPE_MSGRF:
-            break;
         default:
             gDTMFDIGI_Packet.error = PACKET_ERROR_INVALID_TYPE;
             break;
     }
-
+    gDTMFDIGI_Packet.checksumt = myChecksum;
     //gDTMFDIGI_RawPacket_length = 0;
 
     if (gDTMFDIGI_Packet.error == PACKET_ERROR_NONE)
@@ -272,7 +277,7 @@ void DTMFDIGI_DecodePacket()
             gDTMFDIGI_Packet.error = PACKET_ERROR_CHECKSUM;
     }
 
-    if (gDTMFDIGI_Packet.receiverId != GetMyANI())      // If the receiverid is different than the radio ani-id, we are done
+    if (gDTMFDIGI_Packet.receiverId != gMyANI)      // If the receiverid is different than the radio ani-id, we are done
         return;
 
     if (gDTMFDIGI_Packet.error == PACKET_ERROR_NONE)
@@ -287,9 +292,15 @@ void DTMFDIGI_DecodePacket()
                 gDTMFDIGI_comm_status = COMM_STATUS_CALLREQ_IN;
                 gDTMFDIGI_otherRadio = gDTMFDIGI_caller;
                 gDTMFDIGI_sendACK = true;
+                //gDTMFDIGI_Packet.processed = true;
 
                 //FUNCTION_Select(FUNCTION_RECEIVE);
             }
+        }
+        else if (gDTMFDIGI_waitACK)
+        {
+            if (gDTMFDIGI_Packet.dataType == PACKET_TYPE_ACK)
+                gDTMFDIGI_waitACK = false;
         }
         
 
@@ -302,7 +313,9 @@ void DTMFDIGI_DecodePacket()
 void DTMFDIGI_HandleRequest(void){
     if (gDTMF_RX_pending && !gDTMFDIGI_standard_handle)
     {
+        #ifdef ENABLE_DTMFDIGI_DEBUG
         DTMFDIGI_ForceUpdate(DTMFDIGI_DISPL_DEBUG);
+        #endif
         switch (gDTMFDIGI_request_stage)
         {
             case 0: // waiting for first recognition tone
@@ -350,14 +363,27 @@ void DTMFDIGI_HandleRequest(void){
 
 void DTMFDIGI_Process(void)
 {
+    if (gDTMFDIGI_init)
+        DTMFDIGI_Init();
+
+    
     if (forceExit)
     {
         GUI_SelectNextDisplay(DISPLAY_MAIN);
-        return;
     }
+
+    if (gDTMFDIGI_comm_status == COMM_STATUS_CLOSED && gDTMFDIGI_callStatus != CALL_STATUS_RINGING)
+        gDTMFDIGI_callStatus = CALL_STATUS_RINGING;
 
     if (gCurrentFunction == FUNCTION_TRANSMIT)
         return;
+
+    if (gDTMFDIGI_waitACK)
+        return;
+
+    #ifdef ENABLE_DTMFDIGI_DEBUG
+    DTMFDIGI_ForceUpdate(DTMFDIGI_DISPL_DEBUG);
+    #endif
 
     if (gDTMFDIGI_sendACK)
     {
@@ -368,11 +394,31 @@ void DTMFDIGI_Process(void)
     {
         if (gDTMFDIGI_comm_status == COMM_STATUS_CALLREQ_IN)
         {
+            if (!gDTMFDIGI_Packet.processed)
+            {
+                if (gDTMFDIGI_Packet.dataType == PACKET_TYPE_ACK)
+                {
+                    gDTMFDIGI_comm_status = COMM_STATUS_CALL_IN;
+                    gDTMFDIGI_Packet.processed = true;
+                    return;
+                }
+            }
             // We're accepting the call, so send CALLST=RING
             gDTMFDIGI_callStatus = CALL_STATUS_RINGING;
-            gDTMFDIGI_comm_status = COMM_STATUS_CALL_IN;
             
             DTMFDIGI_SendCALLST();
+        }
+        else if (gDTMFDIGI_comm_status == COMM_STATUS_CALL_IN)
+        {
+            if ( gDTMFDIGI_callStatus == CALL_STATUS_BUSY)
+            {
+                if (!gDTMFDIGI_Packet.processed && gDTMFDIGI_Packet.dataType == PACKET_TYPE_ACK)
+                {
+                    DTMFDIGI_Init();
+                    return;
+                }
+                DTMFDIGI_SendCALLST();
+            }
         }
     }
     
@@ -381,49 +427,50 @@ void DTMFDIGI_Process(void)
 void DTMFDIGI_ProcessKeys(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld){
     if ( !bKeyPressed && !bKeyHeld )
     {
+        if ((gDTMFDIGI_callStatus == CALL_STATUS_RINGING) && (gDTMFDIGI_comm_status == COMM_STATUS_CALL_IN))
+        {
+            if (Key == KEY_PTT)
+            {
+                // ANSWER
+
+                return;
+            }
+            else if (Key == KEY_EXIT)
+            {
+                // CLOSE CALL
+                gDTMFDIGI_callStatus = CALL_STATUS_BUSY;
+                return;
+            }
+        }
+
         switch(DTMFDIGI_displayn)
         {
             case DTMFDIGI_DISPL_MAIN:
                 DTMFDIGI_Proces_MAIN(Key);
                 break;
+            #ifdef ENABLE_DTMFDIGI_DEBUG
             case DTMFDIGI_DISPL_DEBUG:
                 DTMFDIGI_Proces_DEBUG(Key);
                 break;
+            #endif
         }
     }
     else if ( bKeyPressed && bKeyHeld && (Key == KEY_EXIT))
     {
-        GUI_SelectNextDisplay(DISPLAY_MAIN);
+        forceExit = true;
     }
 }
 
 char DTMFDGI_nibbleToDTMF(uint8_t nibble)
 {
     // Convert a nibble (4 bits) to a DTMF tone character
-    nibble &= 0x0F; // Ensure nibble is only 4 bits
+    //nibble &= 0x0F; // Ensure nibble is only 4 bits
 
-    if (nibble < 10)
-    {
-        return (char)(nibble + '0'); // 0-9
-    }
-    else
-    {
-        switch (nibble)
-        {
-            case 0x0A: return 'A'; 
-            case 0x0B: return 'B'; 
-            case 0x0C: return 'C'; 
-            case 0x0D: return 'D'; 
-            case 0x0E: return '*'; 
-            case 0x0F: return '#'; 
-            default: return '?';   // Invalid nibble
-        }
-    }
+    return DTMFCHARS[nibble & 0x0F];
 }
 
 uint8_t DTMFDGI_DTMFToNibble(char dtmf)
 {
-    // Convert a DTMF tone character to a nibble (4 bits)
     if (dtmf >= '0' && dtmf <= '9')
     {
         return (uint8_t)(dtmf - '0'); // 0-9
@@ -448,6 +495,7 @@ uint8_t DTMFDGI_generateRawPacket(DTMF_Packet *packet, char* rawPacket)
     // Generate raw DTMF packet based on the protocol described above
     // This function will return a char array containing the DTMF tones to be sent
 
+    packet->processed=true;
     uint8_t packetLength = 10; // Initialize packet length
     //char packet[80]; // Maximum packet length is 80 DTMF tones (40 bytes)
     rawPacket[0] = '*'; // Recognition sequence
@@ -460,10 +508,11 @@ uint8_t DTMFDGI_generateRawPacket(DTMF_Packet *packet, char* rawPacket)
 
     // Add the sender and receiver IDs to the packet
     uint32_t combinedIds = ((uint32_t)(packet->senderId & 0x3FF) << 10) | (uint32_t)(packet->receiverId & 0x3FF);
-    
+    uint8_t nibble;
+
     for (uint8_t i = 0; i < 5; i++) // 5 nibbles for IDs
     {
-        uint8_t nibble = (combinedIds >> (4 * (4 - i))) & 0x0F;
+        nibble = (combinedIds >> (4 * (4 - i))) & 0x0F;
         packet->checksum += nibble;
         rawPacket[3 + i] = DTMFDGI_nibbleToDTMF(nibble);
     }
@@ -475,9 +524,9 @@ uint8_t DTMFDGI_generateRawPacket(DTMF_Packet *packet, char* rawPacket)
             // Generate a message send request packet
             // data[0] = number of packets (4 bits)
             // data[1] = total length of the message (1 byte)
-            rawPacket[packetLength++] = DTMFDGI_nibbleToDTMF(packet->data[dataIndex++]); // Number of packets (4 bits)
-            rawPacket[packetLength++] = DTMFDGI_nibbleToDTMF(packet->data[dataIndex]>>4); // Total length of the message (1 byte)
-            rawPacket[packetLength++] = DTMFDGI_nibbleToDTMF(packet->data[dataIndex++]&0x0F); // Total length of the message (1 byte)
+            rawPacket[packetLength++] = DTMFDGI_nibbleToDTMF(packet->data[0]); // Number of packets (4 bits)
+            rawPacket[packetLength++] = DTMFDGI_nibbleToDTMF(packet->data[1]>>4); // Total length of the message (1 byte)
+            rawPacket[packetLength++] = DTMFDGI_nibbleToDTMF(packet->data[1]&0x0F); // Total length of the message (1 byte)
             packet->checksum += (packet->data[0] & 0x0F) + (packet->data[1] >> 4) + (packet->data[2] & 0x0F); // Update checksum with the data added
             break;
         case PACKET_TYPE_MSG: // Message
@@ -506,7 +555,7 @@ uint8_t DTMFDGI_generateRawPacket(DTMF_Packet *packet, char* rawPacket)
         case PACKET_TYPE_BADPKT: // Bad packet
             // Generate a bad packet notification
             // data[0] = packet number (4 bits)
-            rawPacket[packetLength++] = DTMFDGI_nibbleToDTMF(packet->data[dataIndex++]); // Add the packet number (4 bits) to the packet
+            rawPacket[packetLength++] = DTMFDGI_nibbleToDTMF(packet->data[0]); // Add the packet number (4 bits) to the packet
             packet->checksum += (packet->data[0] & 0x0F); // Update checksum with the data added
             break;
     }
@@ -517,6 +566,7 @@ uint8_t DTMFDGI_generateRawPacket(DTMF_Packet *packet, char* rawPacket)
     //return *packet; // Return the generated packet
     return packetLength; // Return the length of the generated packet
 }
+
 void APP_RunDTMFDigi(void)
 {
     // Initialize DTMF Digital mode
@@ -525,8 +575,7 @@ void APP_RunDTMFDigi(void)
 
     forceExit = false;
     DTMFDIGI_InitDisplay();
-    gDTMFDIGI_comm_status = COMM_STATUS_CLOSED; // No communication in or out
-    gDTMFDIGI_sendACK = false;
+    DTMFDIGI_Init();
 
     // Check for errors
     if ((gEeprom.VfoInfo[gEeprom.TX_VFO].Modulation == MODULATION_CW) || (gEeprom.VfoInfo[gEeprom.TX_VFO].Modulation == MODULATION_UKNOWN))
@@ -535,5 +584,15 @@ void APP_RunDTMFDigi(void)
         DTMFDIGI_displayn = DTMFDIGI_DISPL_TXERR;
     else if (gCurrentVfo->DTMF_DECODING_ENABLE == 0)
         DTMFDIGI_displayn = DTMFDIGI_DISPL_DTMFERR;
+}
+
+void DTMFDIGI_Init(void)
+{
+    gDTMFDIGI_init = false;
+    gDTMFDIGI_comm_status = COMM_STATUS_CLOSED; // No communication in or out
+    gDTMFDIGI_callStatus = CALL_STATUS_RINGING;
+    gDTMFDIGI_sendACK = false;
+    gDTMFDIGI_waitACK = false;
+    gMyANI = DTMFDGI_DTMFToNibble(gEeprom.ANI_DTMF_ID[0])*100+DTMFDGI_DTMFToNibble(gEeprom.ANI_DTMF_ID[1])*10+DTMFDGI_DTMFToNibble(gEeprom.ANI_DTMF_ID[2]);
 }
 #endif

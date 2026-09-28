@@ -38,10 +38,12 @@ uint8_t     DTMFDIGI_menuItem;                  // Selected menu item
 
 const char* DTMFDIGI_MENU_ITEMS[] =      // \0 terminated
 {
-    "Call",
-    "Text message",
-    "Debug",
-    NULL
+    [DTMFDIGI_MENU_CALL] = "Call",
+    [DTMFDIGI_MENU_TEXT] = "Text message",
+#ifdef ENABLE_DTMFDIGI_DEBUG
+    [DTMFDIGI_MENU_DEBUG] = "Debug",
+#endif
+    [DTMFDIGI_MENU_LAST] = NULL
 };
 
 void UI_DisplayDTMFDigi(void)
@@ -56,12 +58,14 @@ void UI_DisplayDTMFDigi(void)
         case DTMFDIGI_DISPL_MAIN:
             DTMFDIGI_UpdateMenu();
             break;
+        #ifdef ENABLE_DTMFDIGI_DEBUG
         case DTMFDIGI_DISPL_DEBUG:
             DTMFDIGI_UpdateDebug();
             break;
+        #endif
         default:
             UI_PrintString("ERROR",0,LCD_WIDTH,1,8);
-            switch(DTMFDIGI_displayn)
+            /*switch(DTMFDIGI_displayn)
             {
                 case DTMFDIGI_DISPL_MODERR:
                     UI_PrintStringSmallNormal("Voice TX disable",0,LCD_WIDTH,3);
@@ -75,21 +79,22 @@ void UI_DisplayDTMFDigi(void)
                 default:
                     UI_PrintStringSmallNormal("Unsupported",0,LCD_WIDTH,3);
                     break;
-            }
+            }*/
             forceExit = true;
     }
     
     char String[20], vfonam[18];
-    sprintf(vfonam,"%s",gEeprom.VfoInfo[gEeprom.TX_VFO].Name);
+    sprintf(vfonam,"%s",gCurrentVfo->Name);
     if (strcmp(vfonam,"") != 0)
-        sprintf(String,"CH: %s",gEeprom.VfoInfo[gEeprom.TX_VFO].Name);
+        sprintf(String,"CH: %s",vfonam);
     else
     {
         sprintf(vfonam,"%d",gCurrentVfo->pTX->Frequency);
         memmove(&vfonam[4],&vfonam[3], strlen(vfonam));
         vfonam[3] = '.';
-        sprintf(String,"FREQ: %s",vfonam);
+        sprintf(String,"FR: %s",vfonam);
     }
+    
     UI_PrintStringSmallBold(String,2,0,6);
     ST7565_BlitFullScreen(); // update the display
     DTMFDIGI_updateDisplay = false;
@@ -123,22 +128,11 @@ void DTMFDIGI_UpdateMenu(void)
     uint8_t prevItem, nextItem = DTMFDIGI_menuItem+1;
 
     if ( DTMFDIGI_menuItem == 0)
-    {
-        prevItem = 0;
-        while (prevItem < 64)
-        {
-            if (DTMFDIGI_MENU_ITEMS[prevItem] == NULL)
-            {
-                prevItem--;
-                break;
-            }
-            prevItem++;
-        }
-    }
+        prevItem = DTMFDIGI_MENU_LAST-1;
     else
         prevItem = DTMFDIGI_menuItem-1;
 
-    if ( DTMFDIGI_MENU_ITEMS[nextItem] == NULL)
+    if ( nextItem == DTMFDIGI_MENU_LAST)
         nextItem = 0;
 
     UI_PrintStringSmallNormal(DTMFDIGI_MENU_ITEMS[prevItem],0, LCD_WIDTH, 1);
@@ -147,41 +141,37 @@ void DTMFDIGI_UpdateMenu(void)
 }
 
 
+#ifdef ENABLE_DTMFDIGI_DEBUG
 void DTMFDIGI_UpdateDebug(void)
 {
-    UI_PrintString("DEBUG",0,LCD_WIDTH,0,8);
-    if ((gDTMFDIGI_request_stage != 0x02) && (!gDTMFDIGI_Packet.processed))
-    {
-        UI_PrintStringSmallNormal("SWAIT",2,0,2);
-        return;
-    }
-
     char String[20];
 
-    if (gDTMFDIGI_Packet.processed)
+    sprintf(String, "DEBUG - %d", gMyANI);
+    UI_PrintString(String,0,LCD_WIDTH,0,8);
+
+    if ((gDTMFDIGI_Packet.error == PACKET_ERROR_NONE)||(gDTMFDIGI_Packet.error == PACKET_ERROR_CHECKSUM))
     {
-        if (gDTMFDIGI_Packet.error == PACKET_ERROR_NONE)
+        sprintf(String, "TYP: %02X CRC: %02X",gDTMFDIGI_Packet.dataType,gDTMFDIGI_Packet.checksum);
+        UI_PrintStringSmallNormal(String,2,0,2);
+        sprintf(String, "SND: %d REC: %d", gDTMFDIGI_Packet.senderId, gDTMFDIGI_Packet.receiverId);
+        UI_PrintStringSmallNormal(String,2,0,3);
+    }
+    else
+    {
+        switch(gDTMFDIGI_Packet.error)
         {
-            sprintf(String, "TYP: %02X CRC: %02X",gDTMFDIGI_Packet.dataType,gDTMFDIGI_Packet.checksum);
-            UI_PrintStringSmallNormal(String,2,0,2);
-            sprintf(String, "SND: %d REC: %d", gDTMFDIGI_Packet.senderId, gDTMFDIGI_Packet.receiverId);
-            UI_PrintStringSmallNormal(String,2,0,3);
-        }
-        else
-        {
-            switch(gDTMFDIGI_Packet.error)
-            {
-                case PACKET_ERROR_CHECKSUM:
-                    UI_PrintString("CRC ERR",0,LCD_WIDTH,2,8);
-                    break;
-                case PACKET_ERROR_INVALID_LENGTH:
-                    UI_PrintString("LEN ERR",0,LCD_WIDTH,2,8);
-                    break;
-                case PACKET_ERROR_INVALID_TYPE:
-                    UI_PrintString("TYP ERR",0,LCD_WIDTH,2,8);
-            }
+            /*case PACKET_ERROR_CHECKSUM:
+                UI_PrintString("CRC ERR",0,LCD_WIDTH,2,8);
+                break;*/
+            case PACKET_ERROR_INVALID_LENGTH:
+                UI_PrintString("LEN ERR",0,LCD_WIDTH,2,8);
+                break;
+            case PACKET_ERROR_INVALID_TYPE:
+                UI_PrintString("TYP ERR",0,LCD_WIDTH,2,8);
+                break;
         }
     }
+    
     gDTMFDIGI_RawPacket[gDTMFDIGI_RawPacket_length] = '\0';
     UI_PrintStringSmallNormal(gDTMFDIGI_RawPacket,2,0,4);
 
@@ -190,7 +180,7 @@ void DTMFDIGI_UpdateDebug(void)
 
     //String = "COMM"
 }
-
+#endif
 
 void DTMFDIGI_ForceUpdate(uint8_t screen)
 {
