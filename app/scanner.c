@@ -15,7 +15,7 @@
  */
 
 #include "app/app.h"
-#ifdef ENABLE_DTMF_CALLING
+#if defined(ENABLE_DTMF_CALLING) || defined(ENABLE_DTMF_DIGITAL)
 #include "app/dtmf.h"
 #endif
 #include "app/generic.h"
@@ -349,7 +349,7 @@ void SCANNER_Start(bool singleFreq)
 		gUpdateStatus = true;
 	}
 
-#ifdef ENABLE_DTMF_CALLING
+#if defined(ENABLE_DTMF_CALLING) || defined(ENABLE_DTMF_DIGITAL)
 	DTMF_clear_RX();
 #endif
 

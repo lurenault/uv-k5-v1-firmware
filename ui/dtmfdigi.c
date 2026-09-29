@@ -43,6 +43,7 @@ const char* DTMFDIGI_MENU_ITEMS[] =      // \0 terminated
 #ifdef ENABLE_DTMFDIGI_DEBUG
     [DTMFDIGI_MENU_DEBUG] = "Debug",
 #endif
+    [DTMFDIGI_MENU_REG] = "Call register",
     [DTMFDIGI_MENU_LAST] = NULL
 };
 
@@ -86,16 +87,16 @@ void UI_DisplayDTMFDigi(void)
             forceExit = true;
     }
     
-    char String[20], vfonam[18];
-    sprintf(vfonam,"%s",gCurrentVfo->Name);
-    if (strcmp(vfonam,"") != 0)
-        sprintf(String,"CH: %s",vfonam);
+    char String[20];
+    //sprintf(vfonam,"%s",gCurrentVfo->Name);
+    if (gCurrentVfo->Name[0] != '\0')
+        sprintf(String,"CH: %s",gCurrentVfo->Name);
     else
     {
-        sprintf(vfonam,"%d",gCurrentVfo->pTX->Frequency);
-        memmove(&vfonam[4],&vfonam[3], strlen(vfonam));
-        vfonam[3] = '.';
-        sprintf(String,"FR: %s",vfonam);
+        //sprintf(vfonam,"%d",gCurrentVfo->pTX->Frequency);
+        //memmove(&vfonam[4],&vfonam[3], strlen(vfonam));
+        //vfonam[3] = '.';
+        sprintf(String,"FR: %s",UI_FormatFrequency(String,gCurrentVfo->pTX->Frequency,4,false));
     }
     
     UI_PrintStringSmallBold(String,2,0,6);
@@ -148,21 +149,11 @@ void DTMFDIGI_UpdateCallScr(void)
 {
     char String[17], tmp[4];
 
-    if (gDTMFDIGI_comm_status == COMM_STATUS_CALL_IN)
-        sprintf(tmp,"IN");
-    else
-        sprintf(tmp,"OUT");
-
-    sprintf(String, "CALL %s", tmp);
+    sprintf(String, "CALL %s", gDTMFDIGI_comm_status == COMM_STATUS_CALL_IN ? "IN" : "OUT");
     UI_PrintString(String,0,LCD_WIDTH,0,8);
     
     // Now we print the caller/callee
-    uint8_t radio;
-
-    if (gDTMFDIGI_comm_status == COMM_STATUS_CALL_OUT || gDTMFDIGI_comm_status == COMM_STATUS_CALLREQ_OUT)
-        radio = gDTMFDIGI_callee;
-    else
-        radio = gDTMFDIGI_caller;
+    uint8_t radio = ( gDTMFDIGI_comm_status == COMM_STATUS_CALL_OUT || gDTMFDIGI_comm_status == COMM_STATUS_CALLREQ_OUT ) ? gDTMFDIGI_callee : gDTMFDIGI_caller;
 
     tmp[0] = DTMFDGI_nibbleToDTMF(radio/100);
     tmp[1] = DTMFDGI_nibbleToDTMF((radio%100)/10);
@@ -176,31 +167,12 @@ void DTMFDIGI_UpdateDebug(void)
 {
     char String[20];
 
-    sprintf(String, "DEBUG - %d", gMyANI);
-    UI_PrintString(String,0,LCD_WIDTH,0,8);
+    UI_PrintString("DEBUG",0,LCD_WIDTH,0,8);
 
-    if ((gDTMFDIGI_Packet.error == PACKET_ERROR_NONE)||(gDTMFDIGI_Packet.error == PACKET_ERROR_CHECKSUM))
-    {
-        sprintf(String, "TYP: %02X CRC: %02X",gDTMFDIGI_Packet.dataType,gDTMFDIGI_Packet.checksum);
-        UI_PrintStringSmallNormal(String,2,0,2);
-        sprintf(String, "SND: %d REC: %d", gDTMFDIGI_Packet.senderId, gDTMFDIGI_Packet.receiverId);
-        UI_PrintStringSmallNormal(String,2,0,3);
-    }
-    else
-    {
-        switch(gDTMFDIGI_Packet.error)
-        {
-            /*case PACKET_ERROR_CHECKSUM:
-                UI_PrintString("CRC ERR",0,LCD_WIDTH,2,8);
-                break;*/
-            case PACKET_ERROR_INVALID_LENGTH:
-                UI_PrintString("LEN ERR",0,LCD_WIDTH,2,8);
-                break;
-            case PACKET_ERROR_INVALID_TYPE:
-                UI_PrintString("TYP ERR",0,LCD_WIDTH,2,8);
-                break;
-        }
-    }
+    sprintf(String, "TYP: %02X CRC: %02X",gDTMFDIGI_Packet.dataType,gDTMFDIGI_Packet.checksum);
+    UI_PrintStringSmallNormal(String,2,0,2);
+    sprintf(String, "SND: %d REC: %d", gDTMFDIGI_Packet.senderId, gDTMFDIGI_Packet.receiverId);
+    UI_PrintStringSmallNormal(String,2,0,3);
     
     gDTMFDIGI_RawPacket[gDTMFDIGI_RawPacket_length] = '\0';
     UI_PrintStringSmallNormal(gDTMFDIGI_RawPacket,2,0,4);

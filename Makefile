@@ -14,7 +14,7 @@ ENABLE_ALARM                  ?= 0
 ENABLE_TX1750                 ?= 0
 ENABLE_PWRON_PASSWORD         ?= 0
 ENABLE_DTMF                   ?= 1
-ENABLE_DTMF_CALLING           ?= 1
+ENABLE_DTMF_CALLING           ?= 0
 ENABLE_FLASHLIGHT             ?= 0
 
 # Total DTMF off: ignore CALLING and do not define it
@@ -50,14 +50,14 @@ ENABLE_SCAN_RANGES            ?= 1
 ENABLE_DIGMODE                ?= 0
 # Minimal APRS TX/RX (ta1js Bell202/HDLC)
 ENABLE_APRS                   ?= 0
-# DTMF Digital protocol for smart calls and text messages; requires ENABLE_DTMF_CALLING
+# DTMF Digital protocol for smart calls and text messages; requires ENABLE_DTMF
 ENABLE_DTMF_DIGITAL			  ?= 1
 # CAT remote control (PC serial); requires ENABLE_UART=1
 ENABLE_CATMODE                ?= 1
 
 ifeq ($(ENABLE_DTMF_DIGITAL),1)
-ifneq ($(ENABLE_DTMF_CALLING),1)
-$(error ENABLE_DTMF_DIGITAL=1 requires ENABLE_DTMF_CALLING=1)
+ifneq ($(ENABLE_DTMF),1)
+$(error ENABLE_DTMF_DIGITAL=1 requires ENABLE_DTMF=1)
 endif
 endif
 
@@ -78,7 +78,7 @@ endif
 ENABLE_AM_FIX_SHOW_DATA       ?= 0
 ENABLE_AGC_SHOW_DATA          ?= 0
 ENABLE_UART_RW_BK_REGS        ?= 0
-ENABLE_DTMFDIGI_DEBUG		  ?= 0
+ENABLE_DTMFDIGI_DEBUG		  ?= 1
 
 # ---- COMPILER/LINKER OPTIONS ----
 ENABLE_CLANG                  ?= 0
@@ -430,11 +430,11 @@ ifeq ($(ENABLE_SCAN_RANGES),1)
 endif
 ifeq ($(ENABLE_DTMF),1)
 	CFLAGS  += -DENABLE_DTMF
-ifeq ($(ENABLE_DTMF_CALLING),1)
-	CFLAGS  += -DENABLE_DTMF_CALLING
 ifeq ($(ENABLE_DTMF_DIGITAL),1)
 	CFLAGS  += -DENABLE_DTMF_DIGITAL
 endif
+ifeq ($(ENABLE_DTMF_CALLING),1)
+	CFLAGS  += -DENABLE_DTMF_CALLING
 endif
 endif
 ifeq ($(ENABLE_AGC_SHOW_DATA),1)

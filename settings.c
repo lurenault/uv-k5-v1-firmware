@@ -186,7 +186,7 @@ void SETTINGS_InitEEPROM(void)
 	EEPROM_ReadBuffer(0x0ED0, Data, 8);
 	gEeprom.DTMF_SIDE_TONE               = (Data[0] <   2) ? Data[0] : true;
 
-#if !defined(ENABLE_DTMF) || defined(ENABLE_DTMF_CALLING)
+#if !defined(ENABLE_DTMF) || defined(ENABLE_DTMF_CALLING) || defined(ENABLE_DTMF_DIGITAL)
 	gEeprom.DTMF_SEPARATE_CODE           = SETTINGS_ValidateDtmfCodes((char *)(Data + 1), 1) ? Data[1] : '*';
 	gEeprom.DTMF_GROUP_CALL_CODE         = SETTINGS_ValidateDtmfCodes((char *)(Data + 2), 1) ? Data[2] : '#';
 	gEeprom.DTMF_DECODE_RESPONSE         = (Data[3] < 4) ? Data[3] : 0;
@@ -200,7 +200,7 @@ void SETTINGS_InitEEPROM(void)
 	EEPROM_ReadBuffer(0x0ED8, Data, 8);
 	gEeprom.DTMF_CODE_PERSIST_TIME  = (Data[0] < 101) ? Data[0] * 10 : 100;
 	gEeprom.DTMF_CODE_INTERVAL_TIME = (Data[1] < 101) ? Data[1] * 10 : 100;
-#if !defined(ENABLE_DTMF) || defined(ENABLE_DTMF_CALLING)
+#if !defined(ENABLE_DTMF) || defined(ENABLE_DTMF_CALLING) || defined(ENABLE_DTMF_DIGITAL)
 	gEeprom.PERMIT_REMOTE_KILL      = (Data[2] <   2) ? Data[2] : true;
 
 	// 0EE0..0EE7
@@ -306,7 +306,7 @@ void SETTINGS_InitEEPROM(void)
 	EEPROM_ReadBuffer(0x0F40, Data, 8);
 	gSetting_F_LOCK            = (Data[0] < F_LOCK_LEN) ? Data[0] : F_LOCK_DEF;
 	gSetting_350TX             = (Data[1] < 2) ? Data[1] : false;  // was true
-#if !defined(ENABLE_DTMF) || defined(ENABLE_DTMF_CALLING)
+#if !defined(ENABLE_DTMF) || defined(ENABLE_DTMF_CALLING) || defined(ENABLE_DTMF_DIGITAL)
 	gSetting_KILLED            = (Data[2] < 2) ? Data[2] : false;
 #endif
 	gSetting_200TX             = (Data[3] < 2) ? Data[3] : false;
@@ -620,7 +620,7 @@ void SETTINGS_SaveSettings(void)
 	EEPROM_WriteBuffer(0x0EA8, State);
 
 	State[0] = gEeprom.DTMF_SIDE_TONE;
-#if !defined(ENABLE_DTMF) || defined(ENABLE_DTMF_CALLING)
+#if !defined(ENABLE_DTMF) || defined(ENABLE_DTMF_CALLING) || defined(ENABLE_DTMF_DIGITAL)
 	State[1] = gEeprom.DTMF_SEPARATE_CODE;
 	State[2] = gEeprom.DTMF_GROUP_CALL_CODE;
 	State[3] = gEeprom.DTMF_DECODE_RESPONSE;
@@ -668,7 +668,7 @@ void SETTINGS_SaveSettings(void)
 	memset(State, 0xFF, sizeof(State));
 	State[0]  = gSetting_F_LOCK;
 	State[1]  = gSetting_350TX;
-#if !defined(ENABLE_DTMF) || defined(ENABLE_DTMF_CALLING)
+#if !defined(ENABLE_DTMF) || defined(ENABLE_DTMF_CALLING) || defined(ENABLE_DTMF_DIGITAL)
 	State[2]  = gSetting_KILLED;
 #endif
 	State[3]  = gSetting_200TX;
@@ -726,7 +726,7 @@ void SETTINGS_SaveChannel(uint8_t Channel, uint8_t VFO, const VFO_Info_t *pVFO, 
 			| (pVFO->CHANNEL_BANDWIDTH << 1)
 			| (pVFO->FrequencyReverse  << 0);
 		State._8[5] = ((pVFO->DTMF_PTT_ID_TX_MODE & 7u) << 1)
-#if !defined(ENABLE_DTMF) || defined(ENABLE_DTMF_CALLING)
+#if !defined(ENABLE_DTMF) || defined(ENABLE_DTMF_CALLING) || defined(ENABLE_DTMF_DIGITAL)
 			| ((pVFO->DTMF_DECODING_ENABLE & 1u) << 0)
 #endif
 		;
@@ -834,7 +834,7 @@ buf[0] = 0
 #ifdef ENABLE_PWRON_PASSWORD
     | (1 << 6)
 #endif
-#ifdef ENABLE_DTMF_CALLING
+#if defined(ENABLE_DTMF_CALLING) || defined(ENABLE_DTMF_DIGITAL)
     | (1 << 7)
 #endif
 ;

@@ -198,7 +198,7 @@ void ACTION_Scan(bool bRestart)
 	// not scanning
 	gMonitor = false;
 
-#ifdef ENABLE_DTMF_CALLING
+#if defined(ENABLE_DTMF_CALLING) || defined(ENABLE_DTMF_DIGITAL)
 	DTMF_clear_RX();
 #endif
 #ifdef ENABLE_DTMF

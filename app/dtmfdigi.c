@@ -94,10 +94,13 @@ bool        gDTMFDIGI_sendACK;                  // If true, overrides pending pa
 uint8_t     gDTMFDIGI_otherRadio;               //
 bool        gDTMFDIGI_waitACK;                  // If true, waits for ACK
 bool        gDTMFDIGI_softReset;
+bool        gDTMFDIGI_missedCall;
 uint16_t    gMyANI;
 bool        gDTMFDIGI_init=true;
 
-const char DTMFCHARS[]="0123456789ABCD*#";
+const char          DTMFCHARS[]="0123456789ABCD*#";
+DTMFDIGI_calltype   gDTMFDIGI_callReg[16];
+uint8_t             gDTMFDIGI_callRegSize;
 
 /*uint16_t GetMyANI()
 {
@@ -448,7 +451,9 @@ void DTMFDIGI_Process(void)
     
     if (forceExit)
     {
+        //gScreenToDisplay = DISPLAY_MAIN;
         GUI_SelectNextDisplay(DISPLAY_MAIN);
+        forceExit = false;
     }
 
     if (gDTMFDIGI_comm_status == COMM_STATUS_CLOSED && gDTMFDIGI_callStatus != CALL_STATUS_RINGING)
@@ -636,21 +641,13 @@ char DTMFDGI_nibbleToDTMF(uint8_t nibble)
 uint8_t DTMFDGI_DTMFToNibble(char dtmf)
 {
     if (dtmf >= '0' && dtmf <= '9')
-    {
         return (uint8_t)(dtmf - '0'); // 0-9
-    }
-    else
+
+    switch (dtmf)
     {
-        switch (dtmf)
-        {
-            case 'A': return 0x0A; 
-            case 'B': return 0x0B; 
-            case 'C': return 0x0C; 
-            case 'D': return 0x0D; 
-            case '*': return 0x0E; 
-            case '#': return 0x0F; 
-            default: return -1;   // Invalid DTMF tone
-        }
+        case '*': return 0x0E; 
+        case '#': return 0x0F; 
+        default: return (uint8_t)(dtmf-'A')+10;   
     }
 }
 
@@ -761,6 +758,7 @@ void DTMFDIGI_Init(void)
     gDTMFDIGI_answered = false;
     gDTMFDIGI_terminate = false;
     gDTMFDIGI_softReset = false;
+    forceExit = false;
     gMyANI = DTMFDGI_DTMFToNibble(gEeprom.ANI_DTMF_ID[0])*100+DTMFDGI_DTMFToNibble(gEeprom.ANI_DTMF_ID[1])*10+DTMFDGI_DTMFToNibble(gEeprom.ANI_DTMF_ID[2]);
 }
 #endif

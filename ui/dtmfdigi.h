@@ -15,6 +15,7 @@
 #define DTMFDIGI_DISPL_DEBUG    0x02    // Display debug info
 #endif
 #define DTMFDIGI_DISPL_CALLSCR  0x03    // CallScreen
+#define DTMFDIGI_DISPL_CALLREG  0x04    // Call register
 
 #define DTMFDIGI_DISPL_DTMFERR  0xFD    // DTMF disabled on selected frequency
 #define DTMFDIGI_DISPL_TXERR    0xFE    // TX disabled on selected frequency
@@ -42,12 +43,12 @@ extern const char*  DTMFDIGI_MENU_ITEMS[];
 enum MenuEntries
 {
     DTMFDIGI_MENU_CALL = 0,
-    DTMFDIGI_MENU_TEXT = 1,
+    DTMFDIGI_MENU_TEXT,
 
 #ifdef ENABLE_DTMFDIGI_DEBUG
     DTMFDIGI_MENU_DEBUG,
 #endif
-
+    DTMFDIGI_MENU_REG,
     DTMFDIGI_MENU_LAST
 };
 

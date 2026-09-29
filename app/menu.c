@@ -717,7 +717,7 @@ void MENU_AcceptSetting(void)
 			gSetting_battery_text = gSubMenuSelection;
 			break;
 
-#if defined(ENABLE_DTMF) && defined(ENABLE_DTMF_CALLING)
+#if defined(ENABLE_DTMF) && (defined(ENABLE_DTMF_CALLING)||defined(ENABLE_DTMF_DIGITAL))
 		case MENU_D_DCD:
 			gTxVfo->DTMF_DECODING_ENABLE = gSubMenuSelection;
 			DTMF_clear_RX();

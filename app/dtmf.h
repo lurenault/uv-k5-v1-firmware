@@ -87,7 +87,7 @@ void DTMF_Append(const char code);
 void DTMF_Reply(void);
 void DTMF_SendEndOfTransmission(void);
 
-#ifdef ENABLE_DTMF_CALLING
+#if defined(ENABLE_DTMF_CALLING) || defined(ENABLE_DTMF_DIGITAL)
 
 extern char              gDTMF_RX[17];
 extern uint8_t           gDTMF_RX_index;

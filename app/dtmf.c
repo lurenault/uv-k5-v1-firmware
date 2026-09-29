@@ -45,7 +45,7 @@ uint8_t           gDTMF_PreviousIndex  = 0;
 char              gDTMF_RX_live[20];
 uint8_t           gDTMF_RX_live_timeout = 0;
 
-#ifdef ENABLE_DTMF_CALLING
+#if defined(ENABLE_DTMF_CALLING) || defined(ENABLE_DTMF_DIGITAL)
 char              gDTMF_RX[17];
 uint8_t           gDTMF_RX_index   = 0;
 uint8_t           gDTMF_RX_timeout = 0;
@@ -69,7 +69,7 @@ bool              gDTMF_IsGroupCall;
 #endif
 DTMF_ReplyState_t gDTMF_ReplyState;
 
-#ifdef ENABLE_DTMF_CALLING
+#if defined(ENABLE_DTMF_CALLING) || defined (ENABLE_DTMF_DIGITAL)
 void DTMF_clear_RX(void)
 {
 	gDTMF_RX_timeout = 0;
@@ -136,7 +136,7 @@ bool DTMF_ValidateCodes(char *pCode, const unsigned int size)
 	return true;
 }
 
-#ifdef ENABLE_DTMF_CALLING
+#if defined(ENABLE_DTMF_CALLING) || defined (ENABLE_DTMF_DIGITAL)
 bool DTMF_GetContact(const int Index, char *pContact)
 {
 	if (Index < 0 || Index >= MAX_DTMF_CONTACTS || pContact == NULL) {

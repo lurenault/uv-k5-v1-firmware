@@ -89,7 +89,7 @@ enum
 	MENU_AL_MOD,
 #endif
 #ifdef ENABLE_DTMF
-# ifdef ENABLE_DTMF_CALLING
+# if defined(ENABLE_DTMF_CALLING) || defined(ENABLE_DTMF_DIGITAL)
 	MENU_ANI_ID,
 # endif
 	MENU_UPCODE,
@@ -101,7 +101,7 @@ enum
 	MENU_D_HOLD,
 # endif
 	MENU_D_PRE,
-# ifdef ENABLE_DTMF_CALLING
+#if defined(ENABLE_DTMF_CALLING)||defined(ENABLE_DTMF_DIGITAL)
 	MENU_D_DCD,
 	MENU_D_LIST,
 # endif

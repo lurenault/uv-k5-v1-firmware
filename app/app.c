@@ -209,7 +209,7 @@ static void CheckForIncoming(void)
 static void HandleIncoming(void)
 {
 	if (!g_SquelchLost) {	// squelch is closed
-#ifdef ENABLE_DTMF_CALLING
+#if defined(ENABLE_DTMF_CALLING) || defined(ENABLE_DTMF_DIGITAL)
 		if (gDTMF_RX_index > 0)
 			DTMF_clear_RX();
 #endif
@@ -664,7 +664,7 @@ static void CheckRadioInterrupts(void)
 						gUpdateDisplay        = true;
 					}
 
-#ifdef ENABLE_DTMF_CALLING
+#if defined(ENABLE_DTMF_CALLING) || defined(ENABLE_DTMF_DIGITAL)
 					if (gRxVfo->DTMF_DECODING_ENABLE || gSetting_KILLED) {
 						if (gDTMF_RX_index >= sizeof(gDTMF_RX) - 1) { // make room
 							memmove(&gDTMF_RX[0], &gDTMF_RX[1], sizeof(gDTMF_RX) - 1);
@@ -1387,7 +1387,7 @@ void APP_TimeSlice500ms(void)
 		if (--gMenuCountdown == 0)
 			exit_menu = (gScreenToDisplay == DISPLAY_MENU);	// exit menu mode
 
-#ifdef ENABLE_DTMF_CALLING
+#if defined(ENABLE_DTMF_CALLING) || defined(ENABLE_DTMF_DIGITAL)
 	if (gDTMF_RX_timeout > 0)
 		if (--gDTMF_RX_timeout == 0)
 			DTMF_clear_RX();

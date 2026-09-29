@@ -73,7 +73,7 @@ void FUNCTION_Init(void)
 	g_VOX_Lost     = false;
 #endif
 
-#ifdef ENABLE_DTMF_CALLING
+#if defined(ENABLE_DTMF_CALLING) || defined(ENABLE_DTMF_DIGITAL)
 	DTMF_clear_RX();
 #endif
 
@@ -144,7 +144,7 @@ void FUNCTION_Transmit()
 	// if DTMF is enabled when TX'ing, it changes the TX audio filtering !! .. 1of11
 	BK4819_DisableDTMF();
 
-#ifdef ENABLE_DTMF_CALLING
+#if defined(ENABLE_DTMF_CALLING)||defined(ENABLE_DTMF_DIGITAL)
 	// clear the DTMF RX buffer
 	DTMF_clear_RX();
 #endif
