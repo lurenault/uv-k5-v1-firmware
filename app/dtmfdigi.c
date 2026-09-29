@@ -65,6 +65,7 @@
 #include <string.h>
 #include <stdlib.h>  // abs()
 #include "driver/system.h"
+#include "audio.h"
 
 uint8_t     gDTMFDIGI_request_stage = 0;        // 0: waiting for first recognition tone, 1: waiting for second recognition tone, 2: waiting for data packet
 bool        gDTMFDIGI_standard_handle = false;  // true: use standard DTMF handle, false: use Digital DTMF handle
@@ -80,9 +81,19 @@ uint8_t     gDTMFDIGI_msgPackets;               // Message packets
 bool        gDTMFDIGI_receiveEN = true;         // Packet reception enabled
 uint8_t     gDTMFDIGI_callStatus;               // Call status
 uint8_t     gDTMFDIGI_ring=30;                  // Ringtone duration
+uint8_t     gDTMFDIGI_ringPulse=1;              // Ring pulse duration
+uint16_t    gDTMFDIGI_ringTimer;
+uint16_t    gDTMFDIGI_ringPulseTimer;
+bool        gDTMFDIGI_ringing = false;
+bool        gDTMFDIGI_updRing;
+bool        gDTMFDIGI_ringPulseOn;
+bool        gDTMFDIGI_endRing;
+bool        gDTMFDIGI_answered;
+bool        gDTMFDIGI_terminate;
 bool        gDTMFDIGI_sendACK;                  // If true, overrides pending packet and sends ACK
 uint8_t     gDTMFDIGI_otherRadio;               //
 bool        gDTMFDIGI_waitACK;                  // If true, waits for ACK
+bool        gDTMFDIGI_softReset;
 uint16_t    gMyANI;
 bool        gDTMFDIGI_init=true;
 
@@ -93,11 +104,22 @@ const char DTMFCHARS[]="0123456789ABCD*#";
     return DTMFDGI_DTMFToNibble(gEeprom.ANI_DTMF_ID[0])*100+DTMFDGI_DTMFToNibble(gEeprom.ANI_DTMF_ID[1])*10+DTMFDGI_DTMFToNibble(gEeprom.ANI_DTMF_ID[2]);
 }*/
 
+void DTMFDIGI_SetRing()
+{
+    gDTMFDIGI_ringing = true;
+    gDTMFDIGI_ringPulseOn = true;
+    gDTMFDIGI_ringTimer = gDTMFDIGI_ring*100;           // DTMFDIGI_Process() is executed exactly every 10ms
+    gDTMFDIGI_ringPulseTimer = gDTMFDIGI_ringPulse*100;
+    gDTMFDIGI_updRing = true;
+    gDTMFDIGI_endRing = false;  
+}
+
 void DTMFDIGI_SendCALLST()
 {
     gDTMFDIGI_Packet.dataType=PACKET_TYPE_CALLST;
     gDTMFDIGI_Packet.receiverId=gDTMFDIGI_caller;
-    gDTMFDIGI_Packet.data[0] = gDTMFDIGI_callStatus | ((gDTMFDIGI_callStatus == CALL_STATUS_RINGING) ? (gDTMFDIGI_ring << 2) : 0x00);
+    gDTMFDIGI_Packet.data[0] = gDTMFDIGI_callStatus;
+    gDTMFDIGI_Packet.data[1] = gDTMFDIGI_ring;
     /*if (gDTMFDIGI_callStatus == CALL_STATUS_RINGING)
         gDTMFDIGI_Packet.data[0] = gDTMFDIGI_callStatus | (gDTMFDIGI_ring << 2);*/
     gDTMFDIGI_Packet.dataLength = 1;
@@ -122,14 +144,15 @@ void DTMFDIGI_GenerateSend(void)
 
 void DTMFDIGI_SendRawPacket()
 {
+    
     RADIO_PrepareTX();
     SYSTEM_DelayMs(400);
     BK4819_EnterDTMF_TX(false);
     gDTMFDIGI_RawPacket[gDTMFDIGI_RawPacket_length] = '\0';
     BK4819_PlayDTMFString(gDTMFDIGI_RawPacket, true, 100, 100, 100, 100);
     BK4819_ExitDTMF_TX(true);
-    SYSTEM_DelayMs(400);
     FUNCTION_Select(FUNCTION_RECEIVE);
+    SYSTEM_DelayMs(400);
 }
 
 #ifdef ENABLE_DTMFDIGI_DEBUG
@@ -141,6 +164,8 @@ void DTMFDIGI_Proces_DEBUG(KEY_Code_t Key)
     {
         DTMFDIGI_Init();
     }
+    else if (Key == KEY_0)
+        DTMFDIGI_SetRing();
 }
 #endif
 
@@ -157,7 +182,7 @@ void DTMFDIGI_Proces_MAIN(KEY_Code_t Key)
     }
     else if (Key == KEY_DOWN)
     {
-        DTMFDIGI_menuItem = (DTMFDIGI_menuItem == DTMFDIGI_MENU_LAST) ? (0) : (DTMFDIGI_menuItem+1);
+        DTMFDIGI_menuItem = (DTMFDIGI_menuItem+1 == DTMFDIGI_MENU_LAST) ? (0) : (DTMFDIGI_menuItem+1);
         /*if (DTMFDIGI_MENU_ITEMS[DTMFDIGI_menuItem] == NULL)
             DTMFDIGI_menuItem = 0;*/
 
@@ -361,11 +386,65 @@ void DTMFDIGI_HandleRequest(void){
     DTMF_HandleRequest(); // call the standard DTMF handle function
 }
 
+
+void DTMFDIGI_ForceCALLSCREEN(void)
+{
+    //DTMFDIGI_InitDisplay();
+    GUI_SelectNextDisplay(DISPLAY_DTMFDIGI);
+    DTMFDIGI_SwitchDisplay(DTMFDIGI_DISPL_CALLSCR, DTMFDIGI_DISPL_MAIN);
+    //GUI_DisplayScreen();
+}
+
 void DTMFDIGI_Process(void)
 {
     if (gDTMFDIGI_init)
         DTMFDIGI_Init();
 
+    if (gDTMFDIGI_ringing)
+    {
+        // Ringing code
+        if (--gDTMFDIGI_ringPulseTimer==0)
+        {
+            gDTMFDIGI_ringPulseTimer = gDTMFDIGI_ringPulse*100;
+            gDTMFDIGI_ringPulseOn = !gDTMFDIGI_ringPulseOn;
+
+            gDTMFDIGI_updRing = true;
+        }
+
+        if (--gDTMFDIGI_ringTimer==0)
+        {
+            gDTMFDIGI_endRing = true;
+        }
+
+        if (gDTMFDIGI_updRing || gDTMFDIGI_endRing)
+        {
+            if (!gDTMFDIGI_ringPulseOn && !gDTMFDIGI_endRing)
+            {
+                /*AUDIO_AudioPathOn();
+                BK4819_PlayTone(880, true);
+                BK4819_ExitTxMute();*/
+			    AUDIO_PlayBeep(BEEP_880HZ_500MS);
+                gDTMFDIGI_ringTimer-=50;
+                gDTMFDIGI_ringPulseTimer-=50;
+                
+            }
+            else if (gDTMFDIGI_ringPulseOn || gDTMFDIGI_endRing )
+            {
+                /*BK4819_EnterTxMute();
+                AUDIO_AudioPathOff();
+                BK4819_TurnsOffTones_TurnsOnRX();*/
+            }
+
+            if (gDTMFDIGI_endRing)
+            {
+                //gDTMFDIGI_endRing = false;
+                gDTMFDIGI_ringing = false;
+            }
+
+            gDTMFDIGI_updRing = false;
+        }
+        
+    }
     
     if (forceExit)
     {
@@ -378,17 +457,22 @@ void DTMFDIGI_Process(void)
     if (gCurrentFunction == FUNCTION_TRANSMIT)
         return;
 
-    if (gDTMFDIGI_waitACK)
-        return;
-
     #ifdef ENABLE_DTMFDIGI_DEBUG
     DTMFDIGI_ForceUpdate(DTMFDIGI_DISPL_DEBUG);
     #endif
+
+    if (gDTMFDIGI_waitACK)
+        return;
+
 
     if (gDTMFDIGI_sendACK)
     {
         gDTMFDIGI_sendACK = false;
         DTMFDIGI_SendACK(gDTMFDIGI_otherRadio);
+    }
+    else if (gDTMFDIGI_softReset)
+    {
+        DTMFDIGI_Init();
     }
     else
     {
@@ -400,6 +484,8 @@ void DTMFDIGI_Process(void)
                 {
                     gDTMFDIGI_comm_status = COMM_STATUS_CALL_IN;
                     gDTMFDIGI_Packet.processed = true;
+                    DTMFDIGI_SetRing();
+                    DTMFDIGI_ForceCALLSCREEN();
                     return;
                 }
             }
@@ -408,7 +494,36 @@ void DTMFDIGI_Process(void)
             
             DTMFDIGI_SendCALLST();
         }
-        else if (gDTMFDIGI_comm_status == COMM_STATUS_CALL_IN)
+        else if (((gDTMFDIGI_comm_status == COMM_STATUS_CALL_IN)||(gDTMFDIGI_comm_status == COMM_STATUS_CALL_OUT)))
+        {
+            if (gDTMFDIGI_terminate)
+                gDTMFDIGI_callStatus = CALL_STATUS_TERMINATED;
+
+            if (gDTMFDIGI_callStatus == CALL_STATUS_TERMINATED)
+            {
+                if (gDTMFDIGI_terminate)
+                {
+                    // Call terminated by us
+                    if (!gDTMFDIGI_Packet.processed)
+                    {
+                        if (gDTMFDIGI_Packet.dataType == PACKET_TYPE_ACK)
+                        {
+                            DTMFDIGI_Init();
+                            return;
+                        }
+                    }
+                    DTMFDIGI_SendCALLST();
+                }
+                else
+                {
+                    gDTMFDIGI_sendACK = true;
+                    gDTMFDIGI_softReset = true;
+                }
+            }
+            // Call terminated            
+        }
+        
+        if (gDTMFDIGI_comm_status == COMM_STATUS_CALL_IN)
         {
             if ( gDTMFDIGI_callStatus == CALL_STATUS_BUSY)
             {
@@ -419,12 +534,34 @@ void DTMFDIGI_Process(void)
                 }
                 DTMFDIGI_SendCALLST();
             }
+            else if (gDTMFDIGI_callStatus == CALL_STATUS_RINGING)
+            {
+                if ( gDTMFDIGI_endRing )    // Ring timeout
+                    DTMFDIGI_Init();
+                else if ( gDTMFDIGI_answered )
+                {
+                    gDTMFDIGI_callStatus = CALL_STATUS_OPEN;
+                }
+            }
+            else if (gDTMFDIGI_callStatus == CALL_STATUS_OPEN && gDTMFDIGI_answered)
+            {
+                if (!gDTMFDIGI_Packet.processed && gDTMFDIGI_Packet.dataType == PACKET_TYPE_ACK)
+                {
+                    gDTMFDIGI_answered = false;
+                    gDTMFDIGI_Packet.processed = true;
+                    return;
+                }
+
+                DTMFDIGI_SendCALLST();
+            }
         }
     }
     
 }
 
-void DTMFDIGI_ProcessKeys(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld){
+
+void DTMFDIGI_BackgroundKeyProcess(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld)
+{
     if ( !bKeyPressed && !bKeyHeld )
     {
         if ((gDTMFDIGI_callStatus == CALL_STATUS_RINGING) && (gDTMFDIGI_comm_status == COMM_STATUS_CALL_IN))
@@ -432,17 +569,44 @@ void DTMFDIGI_ProcessKeys(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld){
             if (Key == KEY_PTT)
             {
                 // ANSWER
-
+                gDTMFDIGI_answered = true;
+                gDTMFDIGI_ringing = false;
                 return;
             }
             else if (Key == KEY_EXIT)
             {
-                // CLOSE CALL
+                // CLOSE CALL - Busy
                 gDTMFDIGI_callStatus = CALL_STATUS_BUSY;
+                gDTMFDIGI_ringing = false;
+                DTMFDIGI_RestoreDisplay();
                 return;
             }
         }
+        else if ((gDTMFDIGI_callStatus == CALL_STATUS_OPEN) && ((gDTMFDIGI_comm_status == COMM_STATUS_CALL_IN)||(gDTMFDIGI_comm_status == COMM_STATUS_CALL_OUT)))
+        {
+            if (Key == KEY_EXIT)
+            {
+                // Terminate call
+                gDTMFDIGI_terminate = true;
+                DTMFDIGI_RestoreDisplay();
+                return;
+            }
+        }
+    }
+}
 
+void DTMFDIGI_ProcessKeys(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld){
+    // Call key handling
+    // This code is here for testing purposes only, it should be moved where it can always be executed
+    
+    if ( DTMFDIGI_displayn == DTMFDIGI_DISPL_CALLSCR )
+    {
+        DTMFDIGI_BackgroundKeyProcess(Key, bKeyPressed, bKeyHeld);
+        return;
+    }
+    // App key handling
+    if ( !bKeyPressed && !bKeyHeld )
+    {
         switch(DTMFDIGI_displayn)
         {
             case DTMFDIGI_DISPL_MAIN:
@@ -575,7 +739,7 @@ void APP_RunDTMFDigi(void)
 
     forceExit = false;
     DTMFDIGI_InitDisplay();
-    DTMFDIGI_Init();
+    //DTMFDIGI_Init();
 
     // Check for errors
     if ((gEeprom.VfoInfo[gEeprom.TX_VFO].Modulation == MODULATION_CW) || (gEeprom.VfoInfo[gEeprom.TX_VFO].Modulation == MODULATION_UKNOWN))
@@ -593,6 +757,10 @@ void DTMFDIGI_Init(void)
     gDTMFDIGI_callStatus = CALL_STATUS_RINGING;
     gDTMFDIGI_sendACK = false;
     gDTMFDIGI_waitACK = false;
+    gDTMFDIGI_ringing = false;
+    gDTMFDIGI_answered = false;
+    gDTMFDIGI_terminate = false;
+    gDTMFDIGI_softReset = false;
     gMyANI = DTMFDGI_DTMFToNibble(gEeprom.ANI_DTMF_ID[0])*100+DTMFDGI_DTMFToNibble(gEeprom.ANI_DTMF_ID[1])*10+DTMFDGI_DTMFToNibble(gEeprom.ANI_DTMF_ID[2]);
 }
 #endif

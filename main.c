@@ -22,6 +22,10 @@
 	#include "am_fix.h"
 #endif
 
+#ifdef ENABLE_DTMF_DIGITAL
+	#include "app/dtmfdigi.h"
+#endif
+
 #include "audio.h"
 #include "board.h"
 #include "misc.h"
@@ -91,6 +95,7 @@ void Main(void)
 	memset(gDTMF_String, '-', sizeof(gDTMF_String));
 	gDTMF_String[sizeof(gDTMF_String) - 1] = 0;
 #endif
+
 
 	BK4819_Init();
 
@@ -222,6 +227,10 @@ void Main(void)
 		RADIO_ConfigureNOAA();
 #endif
 	}
+
+#ifdef ENABLE_DTMF_DIGITAL
+	DTMFDIGI_Init();
+#endif
 
 	while (true) {
 		APP_Update();

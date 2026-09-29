@@ -63,6 +63,9 @@ void UI_DisplayDTMFDigi(void)
             DTMFDIGI_UpdateDebug();
             break;
         #endif
+        case DTMFDIGI_DISPL_CALLSCR:
+            DTMFDIGI_UpdateCallScr();
+            break;
         default:
             UI_PrintString("ERROR",0,LCD_WIDTH,1,8);
             /*switch(DTMFDIGI_displayn)
@@ -141,6 +144,33 @@ void DTMFDIGI_UpdateMenu(void)
 }
 
 
+void DTMFDIGI_UpdateCallScr(void)
+{
+    char String[17], tmp[4];
+
+    if (gDTMFDIGI_comm_status == COMM_STATUS_CALL_IN)
+        sprintf(tmp,"IN");
+    else
+        sprintf(tmp,"OUT");
+
+    sprintf(String, "CALL %s", tmp);
+    UI_PrintString(String,0,LCD_WIDTH,0,8);
+    
+    // Now we print the caller/callee
+    uint8_t radio;
+
+    if (gDTMFDIGI_comm_status == COMM_STATUS_CALL_OUT || gDTMFDIGI_comm_status == COMM_STATUS_CALLREQ_OUT)
+        radio = gDTMFDIGI_callee;
+    else
+        radio = gDTMFDIGI_caller;
+
+    tmp[0] = DTMFDGI_nibbleToDTMF(radio/100);
+    tmp[1] = DTMFDGI_nibbleToDTMF((radio%100)/10);
+    tmp[2] = DTMFDGI_nibbleToDTMF(radio%10);
+    tmp[3] = '\0';
+
+    UI_PrintString( DTMF_FindContact(tmp,String) ? String : tmp,0,LCD_WIDTH,2,8 );
+}
 #ifdef ENABLE_DTMFDIGI_DEBUG
 void DTMFDIGI_UpdateDebug(void)
 {

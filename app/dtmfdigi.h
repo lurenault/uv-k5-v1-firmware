@@ -20,6 +20,7 @@
 #define CALL_STATUS_RINGING             0x00
 #define CALL_STATUS_BUSY                0x01
 #define CALL_STATUS_TERMINATED          0x02
+#define CALL_STATUS_OPEN                0x03
 
 // Error codes
 #define PACKET_ERROR_NONE               0x00
@@ -61,6 +62,9 @@ extern DTMF_Packet  gDTMFDIGI_Packet;           // Structure to hold the parsed 
 extern uint8_t      gDTMFDIGI_request_stage;
 extern uint8_t      gDTMFDIGI_callStatus;
 extern uint8_t      gDTMFDIGI_comm_status;
+
+extern uint8_t     gDTMFDIGI_caller;                   // Caller ID
+extern uint8_t     gDTMFDIGI_callee;                   // Callee ID
 extern uint16_t     gMyANI;
 extern bool         forceExit;
 extern bool         gDTMFDIGI_standard_handle;  // Flag to indicate if standard DTMF handling should be used
@@ -80,6 +84,7 @@ void DTMFDIGI_SendCALLST();
 void DTMFDIGI_Process(void);
 void DTMFDIGI_GenerateSend(void);
 void DTMFDIGI_Init(void);
+void DTMFDIGI_BackgroundKeyProcess(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld);
 
 #ifdef ENABLE_DTMFDIGI_DEBUG
 void DTMFDIGI_Proces_DEBUG(KEY_Code_t Key);

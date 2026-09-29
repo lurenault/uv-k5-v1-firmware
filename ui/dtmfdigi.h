@@ -14,6 +14,7 @@
 #ifdef ENABLE_DTMFDIGI_DEBUG
 #define DTMFDIGI_DISPL_DEBUG    0x02    // Display debug info
 #endif
+#define DTMFDIGI_DISPL_CALLSCR  0x03    // CallScreen
 
 #define DTMFDIGI_DISPL_DTMFERR  0xFD    // DTMF disabled on selected frequency
 #define DTMFDIGI_DISPL_TXERR    0xFE    // TX disabled on selected frequency
@@ -25,6 +26,7 @@ void DTMFDIGI_UpdateMenu(void);
 void DTMFDIGI_ForceUpdate(uint8_t screen);
 void DTMFDIGI_SwitchDisplay(uint8_t display, uint8_t return_point);
 void DTMFDIGI_RestoreDisplay(void);
+void DTMFDIGI_UpdateCallScr(void);
 
 #ifdef ENABLE_DTMFDIGI_DEBUG
 void DTMFDIGI_UpdateDebug(void);

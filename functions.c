@@ -86,6 +86,7 @@ void FUNCTION_Init(void)
 #endif
 
 	gUpdateStatus = true;
+
 }
 
 void FUNCTION_Foreground(const FUNCTION_Type_t PreviousFunction)
