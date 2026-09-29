@@ -386,7 +386,7 @@ void DTMFDIGI_HandleRequest(void){
         }
     }
 
-    DTMF_HandleRequest(); // call the standard DTMF handle function
+    //DTMF_HandleRequest(); // call the standard DTMF handle function
 }
 
 

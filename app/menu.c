@@ -1182,7 +1182,7 @@ void MENU_ShowCurrentSetting(void)
 			gSubMenuSelection = gSetting_battery_text;
 			return;
 
-#if defined(ENABLE_DTMF) && defined(ENABLE_DTMF_CALLING)
+#if defined(ENABLE_DTMF) && (defined(ENABLE_DTMF_CALLING)||defined(ENABLE_DTMF_DIGITAL))
 		case MENU_D_DCD:
 			gSubMenuSelection = gTxVfo->DTMF_DECODING_ENABLE;
 			break;

@@ -303,14 +303,14 @@ void RADIO_ConfigureChannel(const unsigned int VFO, const unsigned int configure
 
 		if (data[5] == 0xFF)
 		{
-#if !defined(ENABLE_DTMF) || defined(ENABLE_DTMF_CALLING)
+#if !defined(ENABLE_DTMF) || defined(ENABLE_DTMF_CALLING) || defined(ENABLE_DTMF_DIGITAL)
 			pVfo->DTMF_DECODING_ENABLE = false;
 #endif
 			pVfo->DTMF_PTT_ID_TX_MODE  = PTT_ID_OFF;
 		}
 		else
 		{
-#if !defined(ENABLE_DTMF) || defined(ENABLE_DTMF_CALLING)
+#if !defined(ENABLE_DTMF) || defined(ENABLE_DTMF_CALLING) || defined(ENABLE_DTMF_DIGITAL)
 			pVfo->DTMF_DECODING_ENABLE = ((data[5] >> 0) & 1u) ? true : false;
 #endif
 			uint8_t pttId = ((data[5] >> 1) & 7u);

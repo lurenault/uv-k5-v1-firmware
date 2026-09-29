@@ -242,11 +242,15 @@ static void HandleIncoming(void)
 	else if (!bFlag)
 		return;
 
-#ifdef ENABLE_DTMF_CALLING
+#if defined(ENABLE_DTMF_CALLING) || defined(ENABLE_DTMF_DIGITAL)
 	if (gScanStateDir == SCAN_OFF && (gRxVfo->DTMF_DECODING_ENABLE || gSetting_KILLED)) {
 
 		// DTMF DCD is enabled
+		#ifdef ENABLE_DTMF_DIGITAL
+		DTMFDIGI_HandleRequest();
+		#else
 		DTMF_HandleRequest();
+		#endif
 		if ((gDTMF_CallState == DTMF_CALL_STATE_NONE) && (gRxReceptionMode == RX_MODE_DETECTED)) {
 			
 			gDualWatchCountdown_10ms = dual_watch_count_after_1_10ms;

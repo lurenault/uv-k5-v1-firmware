@@ -110,7 +110,7 @@ const t_menu_item MenuList[] =
 	{"AlarmT", VOICE_ID_INVALID,                       MENU_AL_MOD        },
 #endif
 #ifdef ENABLE_DTMF
-# ifdef ENABLE_DTMF_CALLING
+# if defined(ENABLE_DTMF_CALLING) || defined(ENABLE_DTMF_DIGITAL)
 	{"ANI ID", VOICE_ID_ANI_CODE,                      MENU_ANI_ID        },
 # endif
 	{"UPCode", VOICE_ID_INVALID,                       MENU_UPCODE        },
@@ -122,7 +122,7 @@ const t_menu_item MenuList[] =
 	{"D Hold", VOICE_ID_INVALID,                       MENU_D_HOLD        },
 # endif
 	{"D Prel", VOICE_ID_INVALID,                       MENU_D_PRE         },
-# ifdef ENABLE_DTMF_CALLING
+# if defined(ENABLE_DTMF_CALLING) || defined(ENABLE_DTMF_DIGITAL)
 	{"D Decd", VOICE_ID_INVALID,                       MENU_D_DCD         },
 	{"D List", VOICE_ID_INVALID,                       MENU_D_LIST        },
 # endif

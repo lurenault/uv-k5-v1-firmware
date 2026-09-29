@@ -685,7 +685,7 @@ void UI_DisplayMain(void)
 		if (vfoInfo->CHANNEL_BANDWIDTH == BANDWIDTH_NARROW)
 			UI_PrintStringSmallNormal("N", LCD_WIDTH + 70, 0, line + 1);
 
-#if !defined(ENABLE_DTMF) || defined(ENABLE_DTMF_CALLING)
+#if !defined(ENABLE_DTMF) || defined(ENABLE_DTMF_CALLING) || defined(ENABLE_DTMF_DIGITAL)
 		// show the DTMF decoding symbol
 		if (vfoInfo->DTMF_DECODING_ENABLE || gSetting_KILLED)
 			UI_PrintStringSmallNormal("DTMF", LCD_WIDTH + 78, 0, line + 1);
