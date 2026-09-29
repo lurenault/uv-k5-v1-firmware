@@ -67,6 +67,9 @@ void UI_DisplayDTMFDigi(void)
         case DTMFDIGI_DISPL_CALLSCR:
             DTMFDIGI_UpdateCallScr();
             break;
+        case DTMFDIGI_DISPL_CONTACTS:
+            DTMFDIGI_UpdatePhoneBook();
+            break;
         default:
             UI_PrintString("ERROR",0,LCD_WIDTH,1,8);
             /*switch(DTMFDIGI_displayn)
@@ -125,6 +128,16 @@ void DTMFDIGI_RestoreDisplay(void)
 {
     DTMFDIGI_InitDisplay();
     DTMFDIGI_displayn = DTMFDIGI_prevdisplayn;
+}
+
+void DTMFDIGI_UpdatePhoneBook(void)
+{
+    uint8_t next = (DTMFDIGI_menuItem == MAX_DTMF_CONTACTS-1) ? 0 : DTMFDIGI_menuItem+1 
+            ,prev = (DTMFDIGI_menuItem == 0) ? (MAX_DTMF_CONTACTS-1) : DTMFDIGI_menuItem-1;
+    
+    UI_PrintStringSmallNormal(contactList[prev].contactName,0,LCD_WIDTH,1);
+    UI_PrintString(contactList[DTMFDIGI_menuItem].contactName,0,LCD_WIDTH,2,8);
+    UI_PrintStringSmallNormal(contactList[next].contactName,0,LCD_WIDTH,4);
 }
 
 void DTMFDIGI_UpdateMenu(void)

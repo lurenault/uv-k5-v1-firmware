@@ -62,6 +62,12 @@ typedef struct{
     bool        missed;             // user has cleared the missed call irq
 } DTMFDIGI_calltype;
 
+typedef struct{
+    uint16_t    contactId;
+    char        contactName[9];
+    bool        isNull;
+} DTMFDIGI_contact;
+
 extern char                 gDTMFDIGI_RawPacket[80];    // Buffer for received DTMF tones
 extern uint8_t              gDTMFDIGI_RawPacket_length; // Length of the received DTMF tones
 extern DTMF_Packet          gDTMFDIGI_Packet;           // Structure to hold the parsed packet data
@@ -69,6 +75,7 @@ extern uint8_t              gDTMFDIGI_request_stage;
 extern uint8_t              gDTMFDIGI_callStatus;
 extern uint8_t              gDTMFDIGI_comm_status;
 extern DTMFDIGI_calltype    gDTMFDIGI_callReg[16];
+extern DTMFDIGI_contact     contactList[];
 extern uint8_t              gDTMFDIGI_caller;           // Caller ID
 extern uint8_t              gDTMFDIGI_callee;           // Callee ID
 extern uint16_t             gMyANI;

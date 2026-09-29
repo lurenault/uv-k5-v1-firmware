@@ -66,6 +66,7 @@
 #include <stdlib.h>  // abs()
 #include "driver/system.h"
 #include "audio.h"
+#include "driver/eeprom.h"
 
 uint8_t     gDTMFDIGI_request_stage = 0;        // 0: waiting for first recognition tone, 1: waiting for second recognition tone, 2: waiting for data packet
 bool        gDTMFDIGI_standard_handle = false;  // true: use standard DTMF handle, false: use Digital DTMF handle
@@ -97,6 +98,7 @@ bool        gDTMFDIGI_softReset;
 bool        gDTMFDIGI_missedCall;
 uint16_t    gMyANI;
 bool        gDTMFDIGI_init=true;
+DTMFDIGI_contact    contactList[MAX_DTMF_CONTACTS];
 
 const char          DTMFCHARS[]="0123456789ABCD*#";
 DTMFDIGI_calltype   gDTMFDIGI_callReg[16];
@@ -106,6 +108,20 @@ uint8_t             gDTMFDIGI_callRegSize;
 {
     return DTMFDGI_DTMFToNibble(gEeprom.ANI_DTMF_ID[0])*100+DTMFDGI_DTMFToNibble(gEeprom.ANI_DTMF_ID[1])*10+DTMFDGI_DTMFToNibble(gEeprom.ANI_DTMF_ID[2]);
 }*/
+
+void DTMFDIGI_InitPhoneBook()
+{
+    char temp[4];
+    for (uint8_t i = 0; i < MAX_DTMF_CONTACTS; i++)
+    {
+	    EEPROM_ReadBuffer(0x1C00 + (i * 16), contactList[i].contactName, 8);
+        contactList[i].contactName[8] = '\0';
+        EEPROM_ReadBuffer(0x1C08 + (i * 16), temp, 3);
+        contactList[i].contactId = DTMFDGI_DTMFToNibble(temp[0])*100 + DTMFDGI_DTMFToNibble(temp[1])*10 + DTMFDGI_DTMFToNibble(temp[2]);
+
+        contactList[i].isNull = contactList[i].contactName[0] == '\0';
+    }
+}
 
 void DTMFDIGI_SetRing()
 {
@@ -121,8 +137,8 @@ void DTMFDIGI_SendCALLST()
 {
     gDTMFDIGI_Packet.dataType=PACKET_TYPE_CALLST;
     gDTMFDIGI_Packet.receiverId=gDTMFDIGI_caller;
-    gDTMFDIGI_Packet.data[0] = gDTMFDIGI_callStatus;
-    gDTMFDIGI_Packet.data[1] = gDTMFDIGI_ring;
+    gDTMFDIGI_Packet.data[0] = gDTMFDIGI_callStatus | (gDTMFDIGI_callStatus==CALL_STATUS_RINGING)?(gDTMFDIGI_ring << 2):0x00;
+    //gDTMFDIGI_Packet.data[1] = gDTMFDIGI_ring;
     /*if (gDTMFDIGI_callStatus == CALL_STATUS_RINGING)
         gDTMFDIGI_Packet.data[0] = gDTMFDIGI_callStatus | (gDTMFDIGI_ring << 2);*/
     gDTMFDIGI_Packet.dataLength = 1;
@@ -134,6 +150,7 @@ void DTMFDIGI_SendCALLST()
 void DTMFDIGI_SendACK(uint8_t receiver)
 {
     gDTMFDIGI_Packet.dataType=PACKET_TYPE_ACK;
+    gDTMFDIGI_Packet.dataLength=0;
     gDTMFDIGI_Packet.receiverId=receiver;
     DTMFDIGI_GenerateSend();
 }
@@ -599,6 +616,23 @@ void DTMFDIGI_BackgroundKeyProcess(KEY_Code_t Key, bool bKeyPressed, bool bKeyHe
         }
     }
 }
+void DTMFDIGI_Process_CONTACTS(KEY_Code_t Key)
+{
+    if (Key == KEY_UP)
+    {
+        DTMFDIGI_menuItem = (DTMFDIGI_menuItem == 0) ? MAX_DTMF_CONTACTS-1 : DTMFDIGI_menuItem-1;
+        DTMFDIGI_ForceUpdate(DTMFDIGI_DISPL_CONTACTS);
+    }
+    else if (Key == KEY_DOWN)
+    {
+        DTMFDIGI_menuItem = (DTMFDIGI_menuItem == MAX_DTMF_CONTACTS-1) ? 0 : DTMFDIGI_menuItem+1;
+        DTMFDIGI_ForceUpdate(DTMFDIGI_DISPL_CONTACTS);
+    }
+    else if (Key == KEY_EXIT)
+    {
+        DTMFDIGI_RestoreDisplay();
+    }
+}
 
 void DTMFDIGI_ProcessKeys(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld){
     // Call key handling
@@ -616,6 +650,9 @@ void DTMFDIGI_ProcessKeys(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld){
         {
             case DTMFDIGI_DISPL_MAIN:
                 DTMFDIGI_Proces_MAIN(Key);
+                break;
+            case DTMFDIGI_DISPL_CONTACTS:
+                DTMFDIGI_Process_CONTACTS(Key);
                 break;
             #ifdef ENABLE_DTMFDIGI_DEBUG
             case DTMFDIGI_DISPL_DEBUG:
@@ -678,7 +715,16 @@ uint8_t DTMFDGI_generateRawPacket(DTMF_Packet *packet, char* rawPacket)
         rawPacket[3 + i] = DTMFDGI_nibbleToDTMF(nibble);
     }
 
+    // Put data in raw packet
+    for (uint8_t i = 0; i < packet->dataLength; i++)
+    {
+        rawPacket[packetLength++] = DTMFDGI_nibbleToDTMF(packet->data[i]);
+        packet->checksum+= packet -> data[i];
+    }
+
+    /*
     uint8_t dataIndex = 0; // Index for the data array
+
     switch (packet->dataType)
     {
         case PACKET_TYPE_MSGRQ: // Message send request
@@ -719,7 +765,7 @@ uint8_t DTMFDGI_generateRawPacket(DTMF_Packet *packet, char* rawPacket)
             rawPacket[packetLength++] = DTMFDGI_nibbleToDTMF(packet->data[0]); // Add the packet number (4 bits) to the packet
             packet->checksum += (packet->data[0] & 0x0F); // Update checksum with the data added
             break;
-    }
+    }*/
 
     rawPacket[DTMF_CHECKSUM_POS] = DTMFDGI_nibbleToDTMF(packet->checksum >> 4); // Add high nibble of checksum to the packet
     rawPacket[DTMF_CHECKSUM_POS + 1] = DTMFDGI_nibbleToDTMF(packet->checksum); // Add low nibble of checksum to the packet
@@ -760,5 +806,6 @@ void DTMFDIGI_Init(void)
     gDTMFDIGI_softReset = false;
     forceExit = false;
     gMyANI = DTMFDGI_DTMFToNibble(gEeprom.ANI_DTMF_ID[0])*100+DTMFDGI_DTMFToNibble(gEeprom.ANI_DTMF_ID[1])*10+DTMFDGI_DTMFToNibble(gEeprom.ANI_DTMF_ID[2]);
+    DTMFDIGI_InitPhoneBook();
 }
 #endif

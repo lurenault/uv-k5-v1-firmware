@@ -28,6 +28,7 @@ void DTMFDIGI_ForceUpdate(uint8_t screen);
 void DTMFDIGI_SwitchDisplay(uint8_t display, uint8_t return_point);
 void DTMFDIGI_RestoreDisplay(void);
 void DTMFDIGI_UpdateCallScr(void);
+void DTMFDIGI_UpdatePhoneBook(void);
 
 #ifdef ENABLE_DTMFDIGI_DEBUG
 void DTMFDIGI_UpdateDebug(void);
