@@ -50,22 +50,26 @@ char              gDTMF_RX[17];
 uint8_t           gDTMF_RX_index   = 0;
 uint8_t           gDTMF_RX_timeout = 0;
 bool              gDTMF_RX_pending = false;
+#endif
 
-bool              gIsDtmfContactValid;
+#ifdef ENABLE_DTMF_CALLING
+bool              gIsDtmfContactValid;//
 char              gDTMF_ID[4];
 char              gDTMF_Caller[4];
 char              gDTMF_Callee[4];
 DTMF_State_t      gDTMF_State;
-uint8_t           gDTMF_DecodeRingCountdown_500ms;
-uint8_t           gDTMF_chosen_contact;
-uint8_t           gDTMF_auto_reset_time_500ms;
-DTMF_CallState_t  gDTMF_CallState;
-DTMF_CallMode_t   gDTMF_CallMode;
+uint8_t           gDTMF_DecodeRingCountdown_500ms;//
+uint8_t           gDTMF_auto_reset_time_500ms;////
+DTMF_CallMode_t   gDTMF_CallMode;//
 
-bool              gDTMF_IsTx;
+bool              gDTMF_IsTx;//
 
 uint8_t           gDTMF_TxStopCountdown_500ms;
-bool              gDTMF_IsGroupCall;
+bool              gDTMF_IsGroupCall;//
+#endif
+#ifdef ENABLE_DTMF_DIGITAL
+uint8_t           gDTMF_chosen_contact;
+DTMF_CallState_t  gDTMF_CallState;
 #endif
 DTMF_ReplyState_t gDTMF_ReplyState;
 
@@ -136,7 +140,7 @@ bool DTMF_ValidateCodes(char *pCode, const unsigned int size)
 	return true;
 }
 
-#if defined(ENABLE_DTMF_CALLING) || defined (ENABLE_DTMF_DIGITAL)
+#if defined(ENABLE_DTMF_CALLING)
 bool DTMF_GetContact(const int Index, char *pContact)
 {
 	if (Index < 0 || Index >= MAX_DTMF_CONTACTS || pContact == NULL) {

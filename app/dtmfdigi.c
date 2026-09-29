@@ -94,7 +94,7 @@ bool        gDTMFDIGI_terminate;
 bool        gDTMFDIGI_sendACK;                  // If true, overrides pending packet and sends ACK
 uint8_t     gDTMFDIGI_otherRadio;               //
 bool        gDTMFDIGI_waitACK;                  // If true, waits for ACK
-bool        gDTMFDIGI_softReset;
+bool        gDTMFDIGI_softReset = false;
 bool        gDTMFDIGI_missedCall;
 uint16_t    gMyANI;
 bool        gDTMFDIGI_init=true;
@@ -108,6 +108,38 @@ uint8_t             gDTMFDIGI_callRegSize;
 {
     return DTMFDGI_DTMFToNibble(gEeprom.ANI_DTMF_ID[0])*100+DTMFDGI_DTMFToNibble(gEeprom.ANI_DTMF_ID[1])*10+DTMFDGI_DTMFToNibble(gEeprom.ANI_DTMF_ID[2]);
 }*/
+
+uint8_t DTMFDIGI_FindPrevContact()
+{
+    uint8_t start = DTMFDIGI_menuItem;
+    uint8_t pos = (start == 0) ? (MAX_DTMF_CONTACTS-1) : (start-1);
+    
+    while (pos != start)
+    {
+        if (!contactList[pos].isNull)
+            return pos;
+
+        pos = (pos == 0) ? (MAX_DTMF_CONTACTS-1) : (pos-1);
+    }
+
+    return start;
+}
+
+uint8_t DTMFDIGI_FindNextContact()
+{
+    uint8_t start = DTMFDIGI_menuItem;
+    uint8_t pos = (start == (MAX_DTMF_CONTACTS-1)) ? 0 : (start+1);
+
+    while (pos != start)
+    {
+        if (!contactList[pos].isNull)
+            return pos;
+
+        pos = (pos == MAX_DTMF_CONTACTS-1) ? 0 : (pos+1);
+    }
+
+    return start;
+}
 
 void DTMFDIGI_InitPhoneBook()
 {
@@ -137,12 +169,24 @@ void DTMFDIGI_SendCALLST()
 {
     gDTMFDIGI_Packet.dataType=PACKET_TYPE_CALLST;
     gDTMFDIGI_Packet.receiverId=gDTMFDIGI_caller;
-    gDTMFDIGI_Packet.data[0] = gDTMFDIGI_callStatus | (gDTMFDIGI_callStatus==CALL_STATUS_RINGING)?(gDTMFDIGI_ring << 2):0x00;
+    uint8_t toSend = gDTMFDIGI_callStatus | (gDTMFDIGI_callStatus==CALL_STATUS_RINGING)?(gDTMFDIGI_ring << 2):0x00;
+    gDTMFDIGI_Packet.data[0] = toSend >> 4;
+    gDTMFDIGI_Packet.data[1] = toSend & 0x0F;
     //gDTMFDIGI_Packet.data[1] = gDTMFDIGI_ring;
     /*if (gDTMFDIGI_callStatus == CALL_STATUS_RINGING)
         gDTMFDIGI_Packet.data[0] = gDTMFDIGI_callStatus | (gDTMFDIGI_ring << 2);*/
-    gDTMFDIGI_Packet.dataLength = 1;
+    gDTMFDIGI_Packet.dataLength = 2;
     
+    DTMFDIGI_GenerateSend();
+    gDTMFDIGI_waitACK = true;
+}
+
+void DTMFDIGI_SendCALLREQ()
+{
+    gDTMFDIGI_Packet.dataType=PACKET_TYPE_CALLRQ;
+    gDTMFDIGI_Packet.receiverId=gDTMFDIGI_callee;
+    gDTMFDIGI_Packet.dataLength = 0;
+
     DTMFDIGI_GenerateSend();
     gDTMFDIGI_waitACK = true;
 }
@@ -302,12 +346,12 @@ void DTMFDIGI_DecodePacket()
                 myChecksum += DTMFDGI_DTMFToNibble(gDTMFDIGI_RawPacket[i]);
             break;
         case PACKET_TYPE_CALLST:
-            if(gDTMFDIGI_RawPacket_length != 11)
+            if(gDTMFDIGI_RawPacket_length != 12)
             {
                 gDTMFDIGI_Packet.error = PACKET_ERROR_INVALID_LENGTH;
                 return;
             }
-            myChecksum += DTMFDGI_DTMFToNibble(gDTMFDIGI_RawPacket[10]);
+            myChecksum += DTMFDGI_DTMFToNibble(gDTMFDIGI_RawPacket[10]) + DTMFDGI_DTMFToNibble(gDTMFDIGI_RawPacket[11]);
             break;
         default:
             gDTMFDIGI_Packet.error = PACKET_ERROR_INVALID_TYPE;
@@ -323,6 +367,9 @@ void DTMFDIGI_DecodePacket()
     }
 
     if (gDTMFDIGI_Packet.receiverId != gMyANI)      // If the receiverid is different than the radio ani-id, we are done
+        return;
+
+    if (gDTMFDIGI_comm_status != COMM_STATUS_CLOSED && gDTMFDIGI_Packet.senderId != gDTMFDIGI_otherRadio)
         return;
 
     if (gDTMFDIGI_Packet.error == PACKET_ERROR_NONE)
@@ -342,10 +389,16 @@ void DTMFDIGI_DecodePacket()
                 //FUNCTION_Select(FUNCTION_RECEIVE);
             }
         }
-        else if (gDTMFDIGI_waitACK)
+        else if (gDTMFDIGI_waitACK && gDTMFDIGI_Packet.dataType == PACKET_TYPE_ACK)
         {
-            if (gDTMFDIGI_Packet.dataType == PACKET_TYPE_ACK)
-                gDTMFDIGI_waitACK = false;
+            gDTMFDIGI_waitACK = false;
+        }
+        else if (gDTMFDIGI_Packet.dataType == PACKET_TYPE_CALLST && (gDTMFDIGI_comm_status == COMM_STATUS_CALL_OUT || gDTMFDIGI_comm_status==COMM_STATUS_CALL_IN))
+        {
+            gDTMFDIGI_sendACK = true;
+            uint8_t temp = DTMFDGI_DTMFToNibble(gDTMFDIGI_RawPacket[10])<<4 | DTMFDGI_DTMFToNibble(gDTMFDIGI_RawPacket[11]);
+            gDTMFDIGI_callStatus = temp & 0x03;
+            gDTMFDIGI_Packet.processed = true;
         }
         
 
@@ -516,6 +569,17 @@ void DTMFDIGI_Process(void)
             
             DTMFDIGI_SendCALLST();
         }
+        else if (gDTMFDIGI_comm_status == COMM_STATUS_CALLREQ_OUT)
+        {
+            if (!gDTMFDIGI_Packet.processed && gDTMFDIGI_Packet.dataType == PACKET_TYPE_ACK)
+            {
+                gDTMFDIGI_comm_status = COMM_STATUS_CALL_OUT;
+                gDTMFDIGI_Packet.processed = false;
+                return;
+            }
+
+            DTMFDIGI_SendCALLREQ();
+        }
         else if (((gDTMFDIGI_comm_status == COMM_STATUS_CALL_IN)||(gDTMFDIGI_comm_status == COMM_STATUS_CALL_OUT)))
         {
             if (gDTMFDIGI_terminate)
@@ -538,7 +602,7 @@ void DTMFDIGI_Process(void)
                 }
                 else
                 {
-                    gDTMFDIGI_sendACK = true;
+                    //gDTMFDIGI_sendACK = true;
                     gDTMFDIGI_softReset = true;
                 }
             }
@@ -581,6 +645,20 @@ void DTMFDIGI_Process(void)
     
 }
 
+bool DTMFDIGI_FindContact(uint16_t id, char* nameBuff)
+{
+    nameBuff[0]='\0';
+    for (uint8_t i = 0; i < MAX_DTMF_CONTACTS; i++)
+    {
+        if (!contactList[i].isNull && contactList[i].contactId == id)
+        {
+            strcpy(nameBuff,contactList[i].contactName);
+            return true;
+        }
+    }
+
+    return false;
+}
 
 void DTMFDIGI_BackgroundKeyProcess(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld)
 {
@@ -616,17 +694,54 @@ void DTMFDIGI_BackgroundKeyProcess(KEY_Code_t Key, bool bKeyPressed, bool bKeyHe
         }
     }
 }
+
+void DTMFDIGI_Process_CONTOPT(KEY_Code_t Key)
+{
+    if (Key == KEY_UP)
+    {
+        DTMFDIGI_menuItem = (DTMFDIGI_menuItem == 0) ? 2 : (DTMFDIGI_menuItem-1);
+        DTMFDIGI_ForceUpdate(DTMFDIGI_DISPL_CONTOPT);
+    }
+    else if (Key == KEY_DOWN)
+    {
+        DTMFDIGI_menuItem = (DTMFDIGI_menuItem == 2) ? 0 : (DTMFDIGI_menuItem+1);
+        DTMFDIGI_ForceUpdate(DTMFDIGI_DISPL_CONTOPT);
+    }
+    else if (Key == KEY_EXIT)
+    {
+        DTMFDIGI_RestoreDisplay();
+    }
+    else if (Key == KEY_MENU)
+    {
+        if (DTMFDIGI_menuItem == DTMFDIGI_OPT_CALL)
+        {
+            // Call selected contact
+            gDTMFDIGI_callee = contactList[DTMFDIGI_selContact].contactId;
+            DTMFDIGI_ForceCALLSCREEN();
+
+            gDTMFDIGI_otherRadio = gDTMFDIGI_callee;
+            gDTMFDIGI_comm_status = COMM_STATUS_CALLREQ_OUT;
+            gDTMFDIGI_callStatus = CALL_STATUS_UNDEFINED;
+        }
+    }
+}
+
 void DTMFDIGI_Process_CONTACTS(KEY_Code_t Key)
 {
     if (Key == KEY_UP)
     {
-        DTMFDIGI_menuItem = (DTMFDIGI_menuItem == 0) ? MAX_DTMF_CONTACTS-1 : DTMFDIGI_menuItem-1;
+        DTMFDIGI_menuItem = DTMFDIGI_FindPrevContact();
         DTMFDIGI_ForceUpdate(DTMFDIGI_DISPL_CONTACTS);
     }
     else if (Key == KEY_DOWN)
     {
-        DTMFDIGI_menuItem = (DTMFDIGI_menuItem == MAX_DTMF_CONTACTS-1) ? 0 : DTMFDIGI_menuItem+1;
+        DTMFDIGI_menuItem = DTMFDIGI_FindNextContact();
         DTMFDIGI_ForceUpdate(DTMFDIGI_DISPL_CONTACTS);
+    }
+    else if (Key == KEY_MENU)
+    {
+        DTMFDIGI_selContact = DTMFDIGI_menuItem;
+        DTMFDIGI_NextDisplay(DTMFDIGI_DISPL_CONTOPT);
     }
     else if (Key == KEY_EXIT)
     {
@@ -653,6 +768,9 @@ void DTMFDIGI_ProcessKeys(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld){
                 break;
             case DTMFDIGI_DISPL_CONTACTS:
                 DTMFDIGI_Process_CONTACTS(Key);
+                break;
+            case DTMFDIGI_DISPL_CONTOPT:
+                DTMFDIGI_Process_CONTOPT(Key);
                 break;
             #ifdef ENABLE_DTMFDIGI_DEBUG
             case DTMFDIGI_DISPL_DEBUG:
@@ -722,51 +840,6 @@ uint8_t DTMFDGI_generateRawPacket(DTMF_Packet *packet, char* rawPacket)
         packet->checksum+= packet -> data[i];
     }
 
-    /*
-    uint8_t dataIndex = 0; // Index for the data array
-
-    switch (packet->dataType)
-    {
-        case PACKET_TYPE_MSGRQ: // Message send request
-            // Generate a message send request packet
-            // data[0] = number of packets (4 bits)
-            // data[1] = total length of the message (1 byte)
-            rawPacket[packetLength++] = DTMFDGI_nibbleToDTMF(packet->data[0]); // Number of packets (4 bits)
-            rawPacket[packetLength++] = DTMFDGI_nibbleToDTMF(packet->data[1]>>4); // Total length of the message (1 byte)
-            rawPacket[packetLength++] = DTMFDGI_nibbleToDTMF(packet->data[1]&0x0F); // Total length of the message (1 byte)
-            packet->checksum += (packet->data[0] & 0x0F) + (packet->data[1] >> 4) + (packet->data[2] & 0x0F); // Update checksum with the data added
-            break;
-        case PACKET_TYPE_MSG: // Message
-            // Generate a message packet
-            // data[0] = packet number (4 bits)
-            // data[n] = message data (already coded in our own alphabet)
-            rawPacket[packetLength++] = DTMFDGI_nibbleToDTMF(packet->data[dataIndex++]); // Packet number (4 bits)
-            for (uint8_t i = 0; i < packet->dataLength; i++)
-            {
-                rawPacket[packetLength++] = packet->data[dataIndex++]; // Message data
-                packet->checksum += (DTMFDGI_DTMFToNibble(packet->data[i]) & 0x0F); // Update checksum with the data added
-            }
-            break;
-        case PACKET_TYPE_CALLST: // Call Status
-            // Generate a call status packet
-            // data[0] = call status code (2 bits)
-            // data[1] = number of seconds (6 bits) if call status code is 0x00
-            uint8_t callStatusCode = packet->data[0] & 0x03; // Extract the call status code (2 bits)
-            if (callStatusCode == CALL_STATUS_RINGING)
-                callStatusCode |= (packet->data[1] & 0x3F) << 2; // Combine with the number of seconds (6 bits)
-
-            rawPacket[packetLength++] = DTMFDGI_nibbleToDTMF(callStatusCode >> 4); // Add the call status code (2 bits) and number of seconds (6 bits) to the packet
-            rawPacket[packetLength++] = DTMFDGI_nibbleToDTMF(callStatusCode); // Add the call status code (2 bits) and number of seconds (6 bits) to the packet
-            packet->checksum += (callStatusCode >> 4) + (callStatusCode & 0x0F); // Update checksum with the data added
-            break;
-        case PACKET_TYPE_BADPKT: // Bad packet
-            // Generate a bad packet notification
-            // data[0] = packet number (4 bits)
-            rawPacket[packetLength++] = DTMFDGI_nibbleToDTMF(packet->data[0]); // Add the packet number (4 bits) to the packet
-            packet->checksum += (packet->data[0] & 0x0F); // Update checksum with the data added
-            break;
-    }*/
-
     rawPacket[DTMF_CHECKSUM_POS] = DTMFDGI_nibbleToDTMF(packet->checksum >> 4); // Add high nibble of checksum to the packet
     rawPacket[DTMF_CHECKSUM_POS + 1] = DTMFDGI_nibbleToDTMF(packet->checksum); // Add low nibble of checksum to the packet
 
@@ -803,9 +876,11 @@ void DTMFDIGI_Init(void)
     gDTMFDIGI_ringing = false;
     gDTMFDIGI_answered = false;
     gDTMFDIGI_terminate = false;
-    gDTMFDIGI_softReset = false;
+    gDTMFDIGI_Packet.processed = true;
     forceExit = false;
     gMyANI = DTMFDGI_DTMFToNibble(gEeprom.ANI_DTMF_ID[0])*100+DTMFDGI_DTMFToNibble(gEeprom.ANI_DTMF_ID[1])*10+DTMFDGI_DTMFToNibble(gEeprom.ANI_DTMF_ID[2]);
-    DTMFDIGI_InitPhoneBook();
+    if (!gDTMFDIGI_softReset)
+        DTMFDIGI_InitPhoneBook();
+    gDTMFDIGI_softReset = false;
 }
 #endif

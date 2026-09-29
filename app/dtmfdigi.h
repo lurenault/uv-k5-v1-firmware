@@ -21,6 +21,7 @@
 #define CALL_STATUS_BUSY                0x01
 #define CALL_STATUS_TERMINATED          0x02
 #define CALL_STATUS_OPEN                0x03
+#define CALL_STATUS_UNDEFINED           0xFF
 
 // Error codes
 #define PACKET_ERROR_NONE               0x00
@@ -98,6 +99,10 @@ void DTMFDIGI_Process(void);
 void DTMFDIGI_GenerateSend(void);
 void DTMFDIGI_Init(void);
 void DTMFDIGI_BackgroundKeyProcess(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld);
+uint8_t DTMFDIGI_FindNextContact();
+uint8_t DTMFDIGI_FindPrevContact();
+bool DTMFDIGI_FindContact(uint16_t id, char* nameBuff);
+void DTMFDIGI_SendCALLREQ();
 
 #ifdef ENABLE_DTMFDIGI_DEBUG
 void DTMFDIGI_Proces_DEBUG(KEY_Code_t Key);

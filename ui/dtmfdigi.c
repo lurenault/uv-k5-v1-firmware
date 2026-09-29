@@ -27,7 +27,9 @@ bool        DTMFDIGI_updateDisplay  =   true;   // If set updates the display
 uint8_t     DTMFDIGI_displayStatus  =   0x00;
 uint8_t     DTMFDIGI_displayn;                  // See defines in ui/dtmfdigi.h
 uint8_t     DTMFDIGI_prevdisplayn;              // Same as above
+uint8_t     DTMFDIGI_prevPrevDisplayN;
 uint8_t     DTMFDIGI_menuItem;                  // Selected menu item
+uint8_t     DTMFDIGI_selContact;
 
 /*
     Menu items:
@@ -45,6 +47,13 @@ const char* DTMFDIGI_MENU_ITEMS[] =      // \0 terminated
 #endif
     [DTMFDIGI_MENU_REG] = "Call register",
     [DTMFDIGI_MENU_LAST] = NULL
+};
+
+const char* DTMFDIGI_CONTACT_OPT[] =
+{
+    [DTMFDIGI_OPT_CALL] = "Call",
+    [DTMFDIGI_OPT_MSG] = "Text Message",
+    [DTMFDIGI_OPT_ID] = NULL
 };
 
 void UI_DisplayDTMFDigi(void)
@@ -69,6 +78,9 @@ void UI_DisplayDTMFDigi(void)
             break;
         case DTMFDIGI_DISPL_CONTACTS:
             DTMFDIGI_UpdatePhoneBook();
+            break;
+        case DTMFDIGI_DISPL_CONTOPT:
+            DTMFDIGI_UpdContactOpt();
             break;
         default:
             UI_PrintString("ERROR",0,LCD_WIDTH,1,8);
@@ -110,6 +122,17 @@ void UI_DisplayDTMFDigi(void)
         SYSTEM_DelayMs(1500);
 }
 
+void DTMFDIGI_UpdContactOpt(void)
+{
+    UI_PrintStringSmallBold(contactList[DTMFDIGI_selContact].contactName,2,0,0);
+    uint8_t prev = (DTMFDIGI_menuItem == 0) ? 2 : (DTMFDIGI_menuItem-1);
+    uint8_t succ = (DTMFDIGI_menuItem == 2) ? 0 : (DTMFDIGI_menuItem+1);
+
+    UI_PrintStringSmallNormal(DTMFDIGI_CONTACT_OPT[prev],0,LCD_WIDTH,1);
+    UI_PrintString(DTMFDIGI_CONTACT_OPT[DTMFDIGI_menuItem],0,LCD_WIDTH,2,8);
+    UI_PrintStringSmallNormal(DTMFDIGI_CONTACT_OPT[succ],0,LCD_WIDTH,1);
+}
+
 void DTMFDIGI_InitDisplay(void)
 {
     DTMFDIGI_updateDisplay = true;
@@ -124,20 +147,26 @@ void DTMFDIGI_SwitchDisplay(uint8_t display, uint8_t return_point)
     DTMFDIGI_prevdisplayn = return_point;
 }
 
+void DTMFDIGI_NextDisplay(uint8_t display)
+{
+    DTMFDIGI_InitDisplay();
+    DTMFDIGI_prevPrevDisplayN = DTMFDIGI_prevdisplayn;
+    DTMFDIGI_prevdisplayn = DTMFDIGI_displayn;
+    DTMFDIGI_displayn = display;
+}
+
 void DTMFDIGI_RestoreDisplay(void)
 {
     DTMFDIGI_InitDisplay();
     DTMFDIGI_displayn = DTMFDIGI_prevdisplayn;
+    DTMFDIGI_prevPrevDisplayN = DTMFDIGI_prevdisplayn;
 }
 
 void DTMFDIGI_UpdatePhoneBook(void)
-{
-    uint8_t next = (DTMFDIGI_menuItem == MAX_DTMF_CONTACTS-1) ? 0 : DTMFDIGI_menuItem+1 
-            ,prev = (DTMFDIGI_menuItem == 0) ? (MAX_DTMF_CONTACTS-1) : DTMFDIGI_menuItem-1;
-    
-    UI_PrintStringSmallNormal(contactList[prev].contactName,0,LCD_WIDTH,1);
+{   
+    UI_PrintStringSmallNormal(contactList[DTMFDIGI_FindPrevContact()].contactName,0,LCD_WIDTH,1);
     UI_PrintString(contactList[DTMFDIGI_menuItem].contactName,0,LCD_WIDTH,2,8);
-    UI_PrintStringSmallNormal(contactList[next].contactName,0,LCD_WIDTH,4);
+    UI_PrintStringSmallNormal(contactList[DTMFDIGI_FindNextContact()].contactName,0,LCD_WIDTH,4);
 }
 
 void DTMFDIGI_UpdateMenu(void)
@@ -160,20 +189,21 @@ void DTMFDIGI_UpdateMenu(void)
 
 void DTMFDIGI_UpdateCallScr(void)
 {
-    char String[17], tmp[4];
+    #ifdef ENABLE_DTMFDIGI_DEBUG
+    DTMFDIGI_UpdateDebug();
+    return;
+    #endif
+
+    char String[17];
 
     sprintf(String, "CALL %s", gDTMFDIGI_comm_status == COMM_STATUS_CALL_IN ? "IN" : "OUT");
     UI_PrintString(String,0,LCD_WIDTH,0,8);
     
     // Now we print the caller/callee
     uint8_t radio = ( gDTMFDIGI_comm_status == COMM_STATUS_CALL_OUT || gDTMFDIGI_comm_status == COMM_STATUS_CALLREQ_OUT ) ? gDTMFDIGI_callee : gDTMFDIGI_caller;
-
-    tmp[0] = DTMFDGI_nibbleToDTMF(radio/100);
-    tmp[1] = DTMFDGI_nibbleToDTMF((radio%100)/10);
-    tmp[2] = DTMFDGI_nibbleToDTMF(radio%10);
-    tmp[3] = '\0';
-
-    UI_PrintString( DTMF_FindContact(tmp,String) ? String : tmp,0,LCD_WIDTH,2,8 );
+    sprintf(String, "%03d", radio);
+    DTMFDIGI_FindContact(radio,String);
+    UI_PrintString( String,0,LCD_WIDTH,2,8 );
 }
 #ifdef ENABLE_DTMFDIGI_DEBUG
 void DTMFDIGI_UpdateDebug(void)
@@ -199,7 +229,8 @@ void DTMFDIGI_UpdateDebug(void)
 
 void DTMFDIGI_ForceUpdate(uint8_t screen)
 {
-    if (screen == DTMFDIGI_displayn)
+    (void)(screen);
+    //if (screen == DTMFDIGI_displayn)
         DTMFDIGI_updateDisplay = true;
 }
 

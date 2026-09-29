@@ -16,6 +16,7 @@
 #endif
 #define DTMFDIGI_DISPL_CALLSCR  0x03    // CallScreen
 #define DTMFDIGI_DISPL_CALLREG  0x04    // Call register
+#define DTMFDIGI_DISPL_CONTOPT  0x05    // Contact options
 
 #define DTMFDIGI_DISPL_DTMFERR  0xFD    // DTMF disabled on selected frequency
 #define DTMFDIGI_DISPL_TXERR    0xFE    // TX disabled on selected frequency
@@ -29,6 +30,8 @@ void DTMFDIGI_SwitchDisplay(uint8_t display, uint8_t return_point);
 void DTMFDIGI_RestoreDisplay(void);
 void DTMFDIGI_UpdateCallScr(void);
 void DTMFDIGI_UpdatePhoneBook(void);
+void DTMFDIGI_UpdContactOpt(void);
+void DTMFDIGI_NextDisplay(uint8_t display);
 
 #ifdef ENABLE_DTMFDIGI_DEBUG
 void DTMFDIGI_UpdateDebug(void);
@@ -39,6 +42,7 @@ extern uint8_t      DTMFDIGI_displayStatus;
 extern uint8_t      DTMFDIGI_displayn;
 extern uint8_t      DTMFDIGI_prevdisplayn;
 extern uint8_t      DTMFDIGI_menuItem;
+extern uint8_t      DTMFDIGI_selContact;
 extern const char*  DTMFDIGI_MENU_ITEMS[];
 
 enum MenuEntries
@@ -51,6 +55,13 @@ enum MenuEntries
 #endif
     DTMFDIGI_MENU_REG,
     DTMFDIGI_MENU_LAST
+};
+
+enum ContactOptions
+{
+    DTMFDIGI_OPT_CALL = 0,
+    DTMFDIGI_OPT_MSG,
+    DTMFDIGI_OPT_ID
 };
 
 
